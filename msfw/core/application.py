@@ -17,6 +17,8 @@ from msfw.core.config import Config
 from msfw.core.database import Database, DatabaseManager, db_manager
 from msfw.core.module import Module, ModuleContext, ModuleManager
 from msfw.core.plugin import Plugin, PluginManager, PREDEFINED_HOOKS
+from msfw.core.openapi import OpenAPIManager, setup_openapi_documentation
+from msfw.core.versioning import version_manager
 from msfw.middleware.logging import LoggingMiddleware
 from msfw.middleware.monitoring import MonitoringMiddleware
 from msfw.middleware.security import SecurityMiddleware
@@ -36,6 +38,7 @@ class MSFWApplication:
         self.database: Optional[Database] = None
         self.module_manager: Optional[ModuleManager] = None
         self.plugin_manager: Optional[PluginManager] = None
+        self.openapi_manager: Optional[OpenAPIManager] = None
         self.sdk: Optional[ServiceSDK] = None
         self._initialized = False
         self._pending_modules: list = []  # For modules added before init
@@ -97,12 +100,13 @@ class MSFWApplication:
         
         # Create FastAPI app
         self.app = FastAPI(
-            title=self.config.app_name,
-            version=self.config.version,
-            description=self.config.description,
+            title=self.config.openapi.title or self.config.app_name,
+            version=self.config.openapi.version or self.config.version,
+            description=self.config.openapi.description or self.config.description,
             debug=self.config.debug,
-            docs_url="/docs" if self.config.debug else None,
-            redoc_url="/redoc" if self.config.debug else None,
+            docs_url=None,  # Will be handled by OpenAPI manager
+            redoc_url=None,  # Will be handled by OpenAPI manager
+            openapi_url=None,  # Will be handled by OpenAPI manager
             lifespan=self._lifespan,
         )
         self._fastapi_app = self.app  # Keep alias for tests
@@ -128,6 +132,32 @@ class MSFWApplication:
         
         # Setup routes
         self._setup_routes()
+        
+        # Register routes from decorator registry
+        try:
+            from msfw.decorators import RouteRegistry
+            RouteRegistry.register_routes(self.app)
+        except Exception as e:
+            # If route registration fails, just continue
+            import structlog
+            logger = structlog.get_logger()
+            logger.debug("Route registration failed", error=str(e))
+            
+        # Apply versioned routes to app
+        try:
+            from msfw.core.versioning import version_manager as vm
+            vm.apply_routes_to_app(self.app)
+        except Exception as e:
+            import structlog
+            logger = structlog.get_logger()
+            logger.debug("Versioned route registration failed", error=str(e))
+        
+        # Setup OpenAPI documentation AFTER all routes are registered
+        self.openapi_manager = setup_openapi_documentation(
+            self.app, 
+            self.config, 
+            version_manager
+        )
         
         # Auto-discover plugins and modules
         if self.config.auto_discover_plugins:
@@ -433,6 +463,36 @@ class MSFWApplication:
         if not self._initialized:
             await self.initialize()
         
+        # Create server config
+        config = uvicorn.Config(
+            self.app,
+            host=host or self.config.host,
+            port=port or self.config.port,
+            **kwargs
+        )
+        
+        # Create and run server
+        server = uvicorn.Server(config)
+        await server.serve()
+    
+    def run_sync(
+        self,
+        host: Optional[str] = None,
+        port: Optional[int] = None,
+        **kwargs
+    ) -> None:
+        """Run the application synchronously (for use outside async context)."""
+        import uvicorn
+        import asyncio
+        
+        async def start():
+            if not self._initialized:
+                await self.initialize()
+        
+        # Initialize if needed
+        asyncio.run(start())
+        
+        # Run with uvicorn.run (blocking)
         uvicorn.run(
             self.app,
             host=host or self.config.host,

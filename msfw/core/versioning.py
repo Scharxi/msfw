@@ -192,8 +192,13 @@ class APIVersionManager:
     def apply_routes_to_app(self, app) -> None:
         """Apply all registered versioned routes to the FastAPI app."""
         from fastapi import APIRouter
+        import structlog
+        
+        logger = structlog.get_logger()
+        logger.debug("Applying versioned routes to app", route_count=len(self._versioned_routes))
         
         for path, routes in self._versioned_routes.items():
+            logger.debug("Processing path", path=path, route_count=len(routes))
             for route in routes:
                 for method in route.methods:
                     # Create a versioned path
@@ -211,7 +216,21 @@ class APIVersionManager:
                                    'status_code', 'dependencies']
                         }
                         
-                        route_decorator(versioned_path, **route_kwargs)(route.func)
+                        logger.debug(
+                            "Adding versioned route", 
+                            path=versioned_path, 
+                            method=method_name,
+                            kwargs=route_kwargs
+                        )
+                        
+                        try:
+                            # Apply the route decorator
+                            route_decorator(versioned_path, **route_kwargs)(route.func)
+                            logger.debug("Successfully added route", path=versioned_path)
+                        except Exception as e:
+                            logger.error("Failed to add route", path=versioned_path, error=str(e))
+                    else:
+                        logger.warning("Method not supported", method=method_name, path=versioned_path)
     
     def get_version_from_request(self, request: Request) -> VersionInfo:
         """Extract version from request based on strategy."""

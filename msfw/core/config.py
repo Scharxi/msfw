@@ -65,6 +65,47 @@ class MonitoringConfig(BaseModel):
     health_check_path: str = Field(default="/health")
 
 
+class OpenAPIConfig(BaseModel):
+    """OpenAPI/Swagger configuration."""
+    
+    enabled: bool = Field(default=True)
+    title: Optional[str] = Field(default=None)  # Will use app_name if not provided
+    description: Optional[str] = Field(default=None)  # Will use app description if not provided
+    version: Optional[str] = Field(default=None)  # Will use app version if not provided
+    docs_url: str = Field(default="/docs")
+    redoc_url: str = Field(default="/redoc")
+    openapi_url: str = Field(default="/openapi.json")
+    
+    # Advanced settings
+    tags_metadata: Optional[List[Dict[str, Any]]] = Field(default=None)
+    servers: Optional[List[Dict[str, str]]] = Field(default=None)
+    contact: Optional[Dict[str, str]] = Field(default=None)
+    license_info: Optional[Dict[str, str]] = Field(default=None)
+    terms_of_service: Optional[str] = Field(default=None)
+    
+    # Security schemes
+    security_schemes: Optional[Dict[str, Dict[str, Any]]] = Field(default=None)
+    
+    # Custom OpenAPI schema modifications
+    include_in_schema: bool = Field(default=True)
+    generate_unique_id_function: Optional[str] = Field(default=None)
+    
+    # UI customization
+    swagger_ui_parameters: Optional[Dict[str, Any]] = Field(default=None)
+    swagger_ui_oauth2_redirect_url: Optional[str] = Field(default="/docs/oauth2-redirect")
+    swagger_ui_init_oauth: Optional[Dict[str, Any]] = Field(default=None)
+    
+    # Documentation options
+    include_version_in_docs: bool = Field(default=True)
+    include_deprecated_endpoints: bool = Field(default=True)
+    group_by_tags: bool = Field(default=True)
+    
+    # Export options
+    export_formats: List[str] = Field(default=["json", "yaml"])
+    export_path: str = Field(default="./openapi")
+    auto_export: bool = Field(default=False)
+
+
 class ServiceConfig(BaseModel):
     """Configuration for a single microservice."""
     
@@ -81,6 +122,7 @@ class ServiceConfig(BaseModel):
     cors: Optional[CorsConfig] = Field(default=None)
     logging: Optional[LoggingConfig] = Field(default=None)
     monitoring: Optional[MonitoringConfig] = Field(default=None)
+    openapi: Optional[OpenAPIConfig] = Field(default=None)
     
     # Custom settings per service
     settings: Dict[str, Any] = Field(default_factory=dict)
@@ -110,6 +152,7 @@ class EnvironmentConfig(BaseModel):
     cors: Optional[CorsConfig] = Field(default=None)
     logging: Optional[LoggingConfig] = Field(default=None)
     monitoring: Optional[MonitoringConfig] = Field(default=None)
+    openapi: Optional[OpenAPIConfig] = Field(default=None)
 
 
 class Config(BaseSettings):
@@ -134,6 +177,7 @@ class Config(BaseSettings):
     cors: CorsConfig = Field(default_factory=CorsConfig)
     logging: LoggingConfig = Field(default_factory=LoggingConfig)
     monitoring: MonitoringConfig = Field(default_factory=MonitoringConfig)
+    openapi: OpenAPIConfig = Field(default_factory=OpenAPIConfig)
     
     # Environment-specific configurations
     environments: Dict[str, EnvironmentConfig] = Field(default_factory=dict)
@@ -209,7 +253,9 @@ class Config(BaseSettings):
             service_config.logging = self.logging
         if service_config.monitoring is None:
             service_config.monitoring = self.monitoring
-            
+        if service_config.openapi is None:
+            service_config.openapi = self.openapi
+        
         return service_config
 
     def get_current_environment_config(self) -> Optional[EnvironmentConfig]:
