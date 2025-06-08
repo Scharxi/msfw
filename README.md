@@ -472,81 +472,35 @@ msfw run --workers 4
 
 # Projektinfo anzeigen
 msfw info
+
+# Framework und Dependencies aktualisieren
+msfw update --framework  # Nur Framework aktualisieren
+msfw update --dependencies  # Nur Dependencies aktualisieren
+msfw update --all  # Beides aktualisieren
+
+# Datenbank-Migrationen verwalten
+msfw migrate --message "Add user table"  # Neue Migration erstellen
+msfw migrate --revision abc123  # Zu spezifischer Revision migrieren
+msfw migrate --revision abc123 --downgrade  # Migration zurückrollen
+
+# Tests ausführen
+msfw test  # Alle Tests ausführen
+msfw test --coverage  # Mit Coverage-Report
+msfw test --unit  # Nur Unit-Tests
+msfw test --integration  # Nur Integration-Tests
+msfw test --e2e  # Nur End-to-End Tests
+msfw test --verbose  # Ausführliche Ausgabe
 ```
 
 ## 📁 Framework Struktur
 
 ```
-msfw/
-├── main.py              # Demo-Anwendung
-├── msfw/                # Framework Code
-│   ├── __init__.py      # Haupt-Exports
-│   ├── core/            # Kern-Komponenten
-│   │   ├── application.py
-│   │   ├── config.py
-│   │   ├── database.py
-│   │   ├── module.py
-│   │   └── plugin.py
-│   ├── middleware/      # Middleware-Komponenten
-│   │   ├── logging.py
-│   │   ├── monitoring.py
-│   │   └── security.py
-│   ├── decorators.py    # Decorator-System
-│   └── cli.py          # CLI-Interface
-├── examples/           # Beispiele
-│   ├── basic_module.py
-│   └── logging_plugin.py
-└── pyproject.toml      # Projekt-Konfiguration
-```
-
-## 🏗️ Architektur-Prinzipien
-
-### 1. Modularität
-Jede Funktionalität ist in separaten, wiederverwendbaren Modulen organisiert.
-
-### 2. Erweiterbarkeit
-Plugin-System ermöglicht es, das Framework ohne Änderung des Kern-Codes zu erweitern.
-
-### 3. Konfigurierbarkeit
-Alles kann über Konfigurationsdateien, Umgebungsvariablen oder Code konfiguriert werden.
-
-### 4. Observability
-Eingebaute Metriken, Logging und Health-Checks für Produktions-Readiness.
-
-### 5. Developer Experience
-CLI-Tools und automatische Erkennung für einfache Entwicklung.
-
-## 🤝 Contributing
-
-Beiträge sind willkommen! Das Framework ist so konzipiert, dass es einfach zu erweitern ist:
-
-1. Fork das Repository
-2. Erstellen Sie einen Feature Branch
-3. Implementieren Sie Ihre Änderungen
-4. Fügen Sie Tests hinzu
-5. Öffnen Sie einen Pull Request
-
-## 📚 Beispiele
-
-Das `examples/` Verzeichnis enthält vollständige Beispiele:
-
-- **[Basic Module](examples/basic_module.py)** - CRUD-Operationen mit SQLAlchemy
-- **[Logging Plugin](examples/logging_plugin.py)** - Event-basiertes Logging
-- **[Microservice Demo](demo_microservices.py)** - Komplette Microservice-Konfiguration
-- **[Konfigurationsdemo](demo_configuration.py)** - Environment Variable Interpolation
-
-## 📖 Dokumentation
-
-- **[Ausführliche Konfigurationsdokumentation](CONFIGURATION.md)** - Detailierte Anleitung zur Konfiguration
-- **[Microservice Configuration Demo](demo_microservices.py)** - Praktische Beispiele
-
-## 🎯 Roadmap
-
 ### ✅ Implementiert
 - [x] **Microservice-spezifische Konfiguration** - Individuell konfigurierbare Services
 - [x] **Environment Variable Interpolation** - Git-freundliche Konfiguration
 - [x] **Umgebungsspezifische Einstellungen** - Dev/Prod Environment Support
 - [x] **Container-ready Configuration** - Docker/Kubernetes Integration
+- [x] **Enhanced CLI Commands** - Update, Migration und Testing Commands
 
 ### 🚧 In Entwicklung
 - [ ] Authentication/Authorization Module
@@ -558,14 +512,4 @@ Das `examples/` Verzeichnis enthält vollständige Beispiele:
 - [X] API Versioning
 - [ ] GraphQL Support
 - [ ] WebSocket Support
-- [ ] Enhanced CLI Commands
 - [ ] Performance Profiling Tools
-
-## 📄 Lizenz
-
-Dieses Projekt ist unter der MIT-Lizenz lizenziert.
-
----
-
-**MSFW** - Baue modulare Microservices mit Leichtigkeit! 🚀
-

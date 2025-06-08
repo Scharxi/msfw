@@ -887,5 +887,352 @@ def list_versions():
     asyncio.run(show_versions())
 
 
+@app.command()
+def update(
+    framework: bool = typer.Option(False, help="Update MSFW framework version"),
+    dependencies: bool = typer.Option(False, help="Update project dependencies"),
+    all: bool = typer.Option(False, help="Update both framework and dependencies"),
+):
+    """Update MSFW framework and/or project dependencies."""
+    if not (framework or dependencies or all):
+        console.print("[yellow]Please specify what to update: --framework, --dependencies, or --all[/yellow]")
+        raise typer.Exit(1)
+    
+    if framework or all:
+        console.print("[blue]Updating MSFW framework...[/blue]")
+        try:
+            subprocess.run(
+                ["pip", "install", "--upgrade", "msfw"],
+                check=True
+            )
+            console.print("[green]✓ MSFW framework updated successfully[/green]")
+        except subprocess.CalledProcessError as e:
+            console.print(f"[red]Failed to update MSFW framework: {e}[/red]")
+            raise typer.Exit(1)
+    
+    if dependencies or all:
+        console.print("[blue]Updating project dependencies...[/blue]")
+        try:
+            # Update pip first
+            subprocess.run(
+                ["pip", "install", "--upgrade", "pip"],
+                check=True
+            )
+            
+            # Update all dependencies
+            subprocess.run(
+                ["pip", "install", "--upgrade", "-r", "requirements.txt"],
+                check=True
+            )
+            console.print("[green]✓ Project dependencies updated successfully[/green]")
+        except subprocess.CalledProcessError as e:
+            console.print(f"[red]Failed to update dependencies: {e}[/red]")
+            raise typer.Exit(1)
+
+
+@app.command()
+def migrate(
+    message: str = typer.Option(None, help="Migration message"),
+    revision: str = typer.Option(None, help="Specific revision to migrate to"),
+    downgrade: bool = typer.Option(False, help="Downgrade instead of upgrade"),
+):
+    """Manage database migrations."""
+    try:
+        import alembic
+        from alembic.config import Config as AlembicConfig
+        from alembic import command
+    except ImportError:
+        console.print("[red]Alembic is not installed. Please install it first:[/red]")
+        console.print("pip install alembic")
+        raise typer.Exit(1)
+    
+    # Validate arguments
+    if not revision and not message:
+        console.print("[red]Either --message (for new migration) or --revision (to run migration) is required[/red]")
+        raise typer.Exit(1)
+    
+    # Initialize Alembic config
+    alembic_cfg = AlembicConfig("alembic.ini" if Path("alembic.ini").exists() else None)
+    
+    # Check if alembic is initialized
+    if not Path("alembic.ini").exists():
+        console.print("[blue]Initializing Alembic...[/blue]")
+        try:
+            # Set up config for new installation
+            alembic_cfg.set_main_option("script_location", "migrations")
+            alembic_cfg.set_main_option("sqlalchemy.url", "sqlite+aiosqlite:///./app.db")
+            
+            # Create alembic.ini file
+            alembic_ini_content = '''# A generic, single database configuration.
+
+[alembic]
+# path to migration scripts
+script_location = migrations
+
+# template used to generate migration files
+# file_template = %%(rev)s_%%(slug)s
+
+# sys.path path, will be prepended to sys.path if present.
+# defaults to the current working directory.
+prepend_sys_path = .
+
+# timezone to use when rendering the date within the migration file
+# as well as the filename.
+# If specified, requires the python-dateutil library that can be
+# installed by adding `alembic[tz]` to the pip requirements
+# string value is passed to dateutil.tz.gettz()
+# leave blank for localtime
+# timezone =
+
+# max length of characters to apply to the
+# "slug" field
+# truncate_slug_length = 40
+
+# set to 'true' to run the environment during
+# the 'revision' command, regardless of autogenerate
+# revision_environment = false
+
+# set to 'true' to allow .pyc and .pyo files without
+# a source .py file to be detected as revisions in the
+# versions/ directory
+# sourceless = false
+
+# version path separator; As mentioned above, this is the character used to split
+# version_locations. The default within new alembic.ini files is "os", which uses
+# os.pathsep. If this key is omitted entirely, it falls back to the legacy
+# behavior of splitting on spaces and/or commas.
+# Valid values for version_path_separator are:
+#
+# version_path_separator = :
+# version_path_separator = ;
+# version_path_separator = space
+version_path_separator = os
+
+# the output encoding used when revision files
+# are written from script.py.mako
+# output_encoding = utf-8
+
+sqlalchemy.url = sqlite+aiosqlite:///./app.db
+
+[post_write_hooks]
+# post_write_hooks defines scripts or Python functions that are run
+# on newly generated revision scripts.  See the documentation for further
+# detail and examples
+
+# format using "black" - use the console_scripts runner, against the "black" entrypoint
+# hooks = black
+# black.type = console_scripts
+# black.entrypoint = black
+# black.options = -l 79 REVISION_SCRIPT_FILENAME
+
+# Logging configuration
+[loggers]
+keys = root,sqlalchemy,alembic
+
+[handlers]
+keys = console
+
+[formatters]
+keys = generic
+
+[logger_root]
+level = WARN
+handlers = console
+qualname =
+
+[logger_sqlalchemy]
+level = WARN
+handlers =
+qualname = sqlalchemy.engine
+
+[logger_alembic]
+level = INFO
+handlers =
+qualname = alembic
+
+[handler_console]
+class = StreamHandler
+args = (sys.stderr,)
+level = NOTSET
+formatter = generic
+
+[formatter_generic]
+format = %(levelname)-5.5s [%(name)s] %(message)s
+datefmt = %H:%M:%S
+'''
+            Path("alembic.ini").write_text(alembic_ini_content)
+            
+            # Create migrations directory
+            Path("migrations").mkdir(exist_ok=True)
+            Path("migrations/versions").mkdir(exist_ok=True)
+            
+            # Create env.py
+            env_py = '''"""Alembic environment configuration."""
+from logging.config import fileConfig
+from sqlalchemy import engine_from_config, pool
+from alembic import context
+from msfw.core.database import Base
+
+# this is the Alembic Config object
+config = context.config
+
+# Interpret the config file for Python logging
+if config.config_file_name is not None:
+    fileConfig(config.config_file_name)
+
+# Add your model's MetaData object here for 'autogenerate' support
+target_metadata = Base.metadata
+
+def run_migrations_offline() -> None:
+    """Run migrations in 'offline' mode."""
+    url = config.get_main_option("sqlalchemy.url")
+    context.configure(
+        url=url,
+        target_metadata=target_metadata,
+        literal_binds=True,
+        dialect_opts={"paramstyle": "named"},
+    )
+
+    with context.begin_transaction():
+        context.run_migrations()
+
+def run_migrations_online() -> None:
+    """Run migrations in 'online' mode."""
+    connectable = engine_from_config(
+        config.get_section(config.config_ini_section, {}),
+        prefix="sqlalchemy.",
+        poolclass=pool.NullPool,
+    )
+
+    with connectable.connect() as connection:
+        context.configure(
+            connection=connection, target_metadata=target_metadata
+        )
+
+        with context.begin_transaction():
+            context.run_migrations()
+
+if context.is_offline_mode():
+    run_migrations_offline()
+else:
+    run_migrations_online()
+'''
+            (Path("migrations") / "env.py").write_text(env_py)
+            
+            # Create script.py.mako
+            script_mako = '''"""${message}
+
+Revision ID: ${up_revision}
+Revises: ${down_revision | comma,n}
+Create Date: ${create_date}
+
+"""
+from alembic import op
+import sqlalchemy as sa
+${imports if imports else ""}
+
+# revision identifiers, used by Alembic.
+revision = ${repr(up_revision)}
+down_revision = ${repr(down_revision)}
+branch_labels = ${repr(branch_labels)}
+depends_on = ${repr(depends_on)}
+
+
+def upgrade() -> None:
+    ${upgrades if upgrades else "pass"}
+
+
+def downgrade() -> None:
+    ${downgrades if downgrades else "pass"}
+'''
+            (Path("migrations") / "script.py.mako").write_text(script_mako)
+            
+            # Reload config to pick up alembic.ini
+            alembic_cfg = AlembicConfig("alembic.ini")
+            
+            console.print("[green]✓ Alembic initialized successfully[/green]")
+        except Exception as e:
+            console.print(f"[red]Failed to initialize Alembic: {e}[/red]")
+            raise typer.Exit(1)
+    
+    # Create new migration
+    if not revision:
+        console.print(f"[blue]Creating new migration: {message}[/blue]")
+        try:
+            command.revision(alembic_cfg, message=message, autogenerate=True)
+            console.print("[green]✓ Migration created successfully[/green]")
+        except Exception as e:
+            console.print(f"[red]Failed to create migration: {e}[/red]")
+            raise typer.Exit(1)
+    else:
+        # Run migration
+        console.print(f"[blue]Running migration to revision: {revision}[/blue]")
+        try:
+            if downgrade:
+                command.downgrade(alembic_cfg, revision)
+                console.print("[green]✓ Migration downgraded successfully[/green]")
+            else:
+                command.upgrade(alembic_cfg, revision)
+                console.print("[green]✓ Migration upgraded successfully[/green]")
+        except Exception as e:
+            console.print(f"[red]Failed to run migration: {e}[/red]")
+            raise typer.Exit(1)
+
+
+@app.command()
+def test(
+    coverage: bool = typer.Option(False, help="Run tests with coverage reporting"),
+    unit: bool = typer.Option(False, help="Run only unit tests"),
+    integration: bool = typer.Option(False, help="Run only integration tests"),
+    e2e: bool = typer.Option(False, help="Run only end-to-end tests"),
+    verbose: bool = typer.Option(False, help="Show verbose test output"),
+):
+    """Run tests with optional coverage reporting."""
+    try:
+        import pytest
+    except ImportError:
+        console.print("[red]pytest is not installed. Please install it first:[/red]")
+        console.print("pip install pytest pytest-asyncio pytest-cov")
+        raise typer.Exit(1)
+    
+    # Build pytest arguments
+    args = []
+    
+    # Add coverage if requested
+    if coverage:
+        try:
+            import pytest_cov
+        except ImportError:
+            console.print("[red]pytest-cov is not installed. Please install it first:[/red]")
+            console.print("pip install pytest-cov")
+            raise typer.Exit(1)
+        args.extend(["--cov=msfw", "--cov-report=term-missing"])
+    
+    # Add test type filters
+    if unit:
+        args.append("-m unit")
+    elif integration:
+        args.append("-m integration")
+    elif e2e:
+        args.append("-m e2e")
+    
+    # Add verbosity
+    if verbose:
+        args.append("-v")
+    
+    # Run tests
+    console.print("[blue]Running tests...[/blue]")
+    try:
+        result = pytest.main(args)
+        if result == 0:
+            console.print("[green]✓ All tests passed successfully[/green]")
+        else:
+            console.print(f"[red]Tests failed with exit code {result}[/red]")
+            raise typer.Exit(result)
+    except Exception as e:
+        console.print(f"[red]Failed to run tests: {e}[/red]")
+        raise typer.Exit(1)
+
+
 if __name__ == "__main__":
     app() 

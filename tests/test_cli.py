@@ -255,6 +255,228 @@ class TestCLIIntegration:
         finally:
             os.chdir(original_cwd)
 
+    def test_update_command(self, temp_dir, monkeypatch):
+        """Test update command."""
+        from typer.testing import CliRunner
+        from msfw.cli import app
+        import os
+        from unittest.mock import patch
+        
+        runner = CliRunner()
+        
+        # Mock subprocess.run to avoid actual updates
+        def mock_run(*args, **kwargs):
+            return type('MockResponse', (), {'returncode': 0})()
+        
+        with patch('subprocess.run', side_effect=mock_run):
+            # Test framework update
+            result = runner.invoke(app, ["update", "--framework"])
+            assert result.exit_code == 0
+            assert "Updating MSFW framework" in result.stdout
+            
+            # Test dependencies update
+            result = runner.invoke(app, ["update", "--dependencies"])
+            assert result.exit_code == 0
+            assert "Updating project dependencies" in result.stdout
+            
+            # Test all update
+            result = runner.invoke(app, ["update", "--all"])
+            assert result.exit_code == 0
+            assert "Updating MSFW framework" in result.stdout
+            assert "Updating project dependencies" in result.stdout
+            
+            # Test no options
+            result = runner.invoke(app, ["update"])
+            assert result.exit_code == 1
+            assert "Please specify what to update" in result.stdout
+
+    def test_migrate_command(self, temp_dir):
+        """Test migrate command."""
+        from typer.testing import CliRunner
+        from msfw.cli import app
+        import os
+        from pathlib import Path
+        from unittest.mock import patch, MagicMock
+        
+        runner = CliRunner()
+        
+        # Create a test project structure
+        project_dir = temp_dir / "test_project"
+        project_dir.mkdir()
+        (project_dir / "modules").mkdir()
+        (project_dir / "plugins").mkdir()
+        (project_dir / "config").mkdir()
+        
+        # Change to project directory
+        original_cwd = os.getcwd()
+        try:
+            os.chdir(project_dir)
+            
+            # Create mock objects
+            mock_alembic_config = MagicMock()
+            mock_command = MagicMock()
+            
+            # Mock the alembic imports in sys.modules
+            with patch.dict('sys.modules', {
+                'alembic': MagicMock(),
+                'alembic.config': MagicMock(Config=mock_alembic_config),
+                'alembic.command': mock_command
+            }):
+                # Test initializing migrations
+                result = runner.invoke(app, ["migrate", "--message", "Initial migration"])
+                assert result.exit_code == 0
+                assert "Initializing Alembic" in result.stdout
+                
+                # Verify migration files were created
+                assert (project_dir / "migrations").exists()
+                assert (project_dir / "migrations" / "env.py").exists()
+                assert (project_dir / "migrations" / "script.py.mako").exists()
+                assert (project_dir / "migrations" / "versions").exists()
+                assert (project_dir / "alembic.ini").exists()
+                
+                # Test creating a new migration (alembic.ini exists now)
+                result = runner.invoke(app, ["migrate", "--message", "Add user table"])
+                assert result.exit_code == 0
+                assert "Creating new migration" in result.stdout
+                
+                # Test upgrading to a specific revision
+                result = runner.invoke(app, ["migrate", "--revision", "abc123"])
+                assert result.exit_code == 0
+                assert "Running migration" in result.stdout
+                
+                # Test downgrading
+                result = runner.invoke(app, ["migrate", "--revision", "abc123", "--downgrade"])
+                assert result.exit_code == 0
+                assert "Migration downgraded" in result.stdout
+                
+        finally:
+            os.chdir(original_cwd)
+
+    def test_test_command(self, temp_dir):
+        """Test test command."""
+        from typer.testing import CliRunner
+        from msfw.cli import app
+        import os
+        from unittest.mock import patch
+        
+        runner = CliRunner()
+        
+        # Create a test project structure
+        project_dir = temp_dir / "test_project"
+        project_dir.mkdir()
+        (project_dir / "tests").mkdir()
+        
+        # Create a simple test file
+        test_file = project_dir / "tests" / "test_example.py"
+        test_file.write_text('''
+import pytest
+
+@pytest.mark.unit
+def test_example():
+    assert True
+''')
+        
+        # Change to project directory
+        original_cwd = os.getcwd()
+        try:
+            os.chdir(project_dir)
+            
+            # Mock pytest.main to avoid actual test execution
+            def mock_pytest_main(*args, **kwargs):
+                return 0
+            
+            with patch('pytest.main', side_effect=mock_pytest_main):
+                # Test running all tests
+                result = runner.invoke(app, ["test"])
+                assert result.exit_code == 0
+                assert "Running tests" in result.stdout
+                
+                # Test with coverage
+                result = runner.invoke(app, ["test", "--coverage"])
+                assert result.exit_code == 0
+                assert "Running tests" in result.stdout
+                
+                # Test unit tests only
+                result = runner.invoke(app, ["test", "--unit"])
+                assert result.exit_code == 0
+                assert "Running tests" in result.stdout
+                
+                # Test integration tests only
+                result = runner.invoke(app, ["test", "--integration"])
+                assert result.exit_code == 0
+                assert "Running tests" in result.stdout
+                
+                # Test e2e tests only
+                result = runner.invoke(app, ["test", "--e2e"])
+                assert result.exit_code == 0
+                assert "Running tests" in result.stdout
+                
+                # Test verbose output
+                result = runner.invoke(app, ["test", "--verbose"])
+                assert result.exit_code == 0
+                assert "Running tests" in result.stdout
+                
+                # Test failing tests
+                def mock_failing_pytest(*args, **kwargs):
+                    return 1
+                
+                with patch('pytest.main', side_effect=mock_failing_pytest):
+                    result = runner.invoke(app, ["test"])
+                    assert result.exit_code == 1
+                    assert "Tests failed" in result.stdout
+                
+        finally:
+            os.chdir(original_cwd)
+
+    def test_missing_dependencies(self, temp_dir):
+        """Test handling of missing dependencies."""
+        from typer.testing import CliRunner
+        from msfw.cli import app
+        import os
+        from unittest.mock import patch, MagicMock
+        import builtins
+        
+        runner = CliRunner()
+        
+        # Save the original import
+        original_import = builtins.__import__
+        
+        # Test missing pytest
+        def mock_import_pytest(name, *args, **kwargs):
+            if name == 'pytest':
+                raise ImportError("No module named 'pytest'")
+            # Use the original import for everything else
+            return original_import(name, *args, **kwargs)
+        
+        with patch('builtins.__import__', side_effect=mock_import_pytest):
+            result = runner.invoke(app, ["test"])
+            assert result.exit_code == 1
+            assert "pytest is not installed" in result.stdout
+        
+        # Test missing pytest-cov
+        def mock_import_cov(name, *args, **kwargs):
+            if name == 'pytest_cov':
+                raise ImportError("No module named 'pytest_cov'")
+            # Use the original import for everything else
+            return original_import(name, *args, **kwargs)
+        
+        with patch('builtins.__import__', side_effect=mock_import_cov):
+            result = runner.invoke(app, ["test", "--coverage"])
+            assert result.exit_code == 1
+            assert "pytest-cov is not installed" in result.stdout
+        
+        # Test missing alembic
+        def mock_import_alembic(name, *args, **kwargs):
+            if name in ['alembic', 'alembic.config', 'alembic.command']:
+                raise ImportError(f"No module named '{name}'")
+            # Use the original import for everything else
+            return original_import(name, *args, **kwargs)
+        
+        with patch('builtins.__import__', side_effect=mock_import_alembic):
+            result = runner.invoke(app, ["migrate", "--message", "test"])
+            assert result.exit_code == 1
+            assert "Alembic is not installed" in result.stdout
+
 
 @pytest.mark.e2e
 class TestCLIEndToEnd:
