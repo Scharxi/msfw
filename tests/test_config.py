@@ -268,29 +268,17 @@ class TestLoggingConfig:
         config = LoggingConfig()
         
         assert config.level == "INFO"
-        assert config.format == "json"
-        assert config.handlers == ["console"]
-        assert config.file_path is None
-        assert config.max_file_size == "10MB"
-        assert config.backup_count == 5
+        assert config.format == "text"
     
     def test_custom_logging_config(self):
         """Test custom logging configuration."""
         config = LoggingConfig(
             level="DEBUG",
-            format="text",
-            handlers=["console", "file"],
-            file_path="/var/log/app.log",
-            max_file_size="50MB",
-            backup_count=10,
+            format="json",
         )
         
         assert config.level == "DEBUG"
-        assert config.format == "text"
-        assert config.handlers == ["console", "file"]
-        assert config.file_path == "/var/log/app.log"
-        assert config.max_file_size == "50MB"
-        assert config.backup_count == 10
+        assert config.format == "json"
 
 
 @pytest.mark.unit
@@ -318,4 +306,137 @@ class TestMonitoringConfig:
         assert config.enabled is False
         assert config.prometheus_enabled is False
         assert config.metrics_path == "/custom-metrics"
-        assert config.health_check_path == "/custom-health" 
+        assert config.health_check_path == "/custom-health"
+
+
+@pytest.mark.unit
+class TestEnvironmentVariableInterpolation:
+    """Test environment variable interpolation in configuration."""
+
+    def test_simple_env_var_interpolation(self, monkeypatch):
+        """Test simple environment variable interpolation."""
+        monkeypatch.setenv("TEST_VAR", "test_value")
+        
+        result = Config._interpolate_env_vars("${TEST_VAR}")
+        assert result == "test_value"
+
+    def test_env_var_with_default(self, monkeypatch):
+        """Test environment variable with default value."""
+        # Unset variable should use default
+        result = Config._interpolate_env_vars("${UNSET_VAR:default_value}")
+        assert result == "default_value"
+        
+        # Set variable should override default
+        monkeypatch.setenv("SET_VAR", "env_value")
+        result = Config._interpolate_env_vars("${SET_VAR:default_value}")
+        assert result == "env_value"
+
+    def test_required_env_var_missing(self):
+        """Test that missing required environment variable raises error."""
+        with pytest.raises(ValueError, match="Environment variable 'MISSING_VAR' is required"):
+            Config._interpolate_env_vars("${MISSING_VAR}")
+
+    def test_complex_string_interpolation(self, monkeypatch):
+        """Test interpolation in complex strings."""
+        monkeypatch.setenv("DB_HOST", "localhost")
+        monkeypatch.setenv("DB_NAME", "myapp")
+        
+        result = Config._interpolate_env_vars("postgresql://${DB_HOST}:5432/${DB_NAME}")
+        assert result == "postgresql://localhost:5432/myapp"
+
+    def test_dict_interpolation(self, monkeypatch):
+        """Test interpolation in dictionary values."""
+        monkeypatch.setenv("SECRET", "mysecret")
+        
+        data = {
+            "security": {
+                "secret_key": "${SECRET}",
+                "static_value": "unchanged"
+            }
+        }
+        
+        result = Config._interpolate_env_vars(data)
+        assert result["security"]["secret_key"] == "mysecret"
+        assert result["security"]["static_value"] == "unchanged"
+
+    def test_list_interpolation(self, monkeypatch):
+        """Test interpolation in list values."""
+        monkeypatch.setenv("HOST1", "host1.com")
+        monkeypatch.setenv("HOST2", "host2.com")
+        
+        data = ["${HOST1}", "${HOST2:default.com}", "static.com"]
+        
+        result = Config._interpolate_env_vars(data)
+        assert result == ["host1.com", "host2.com", "static.com"]
+
+    def test_from_file_with_interpolation(self, monkeypatch):
+        """Test loading configuration from file with interpolation."""
+        monkeypatch.setenv("TEST_SECRET", "env-secret-key")
+        monkeypatch.setenv("TEST_DB_HOST", "env-db-host")
+        
+        toml_content = """
+app_name = "${APP_NAME:Test App}"
+debug = "${DEBUG:true}"
+
+[database]
+url = "postgresql://${TEST_DB_HOST}:5432/testdb"
+
+[security]
+secret_key = "${TEST_SECRET}"
+"""
+        
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.toml', delete=False) as f:
+            f.write(toml_content)
+            f.flush()
+            
+            try:
+                config = Config.from_file(f.name)
+                
+                assert config.app_name == "Test App"  # Uses default
+                assert config.debug is True
+                assert config.database.url == "postgresql://env-db-host:5432/testdb"
+                assert config.security.secret_key == "env-secret-key"
+            finally:
+                os.unlink(f.name)
+
+    def test_boolean_interpolation(self, monkeypatch):
+        """Test boolean value interpolation."""
+        monkeypatch.setenv("ENABLE_FEATURE", "true")
+        monkeypatch.setenv("DISABLE_FEATURE", "false")
+        
+        # Test direct boolean interpolation
+        assert Config._interpolate_env_vars("${ENABLE_FEATURE}") == "true"
+        assert Config._interpolate_env_vars("${DISABLE_FEATURE}") == "false"
+        
+        # Test with defaults
+        assert Config._interpolate_env_vars("${UNSET_BOOL:true}") == "true"
+
+    def test_from_file_and_env_priority(self, monkeypatch):
+        """Test that environment variables override file values in from_file_and_env."""
+        # Set environment variables
+        monkeypatch.setenv("APP_NAME", "Env Override App")
+        monkeypatch.setenv("DATABASE__URL", "postgresql://env-override")
+        
+        toml_content = """
+app_name = "${APP_NAME:File App}"
+debug = true
+
+[database]
+url = "${DATABASE_URL:sqlite:///file.db}"
+"""
+        
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.toml', delete=False) as f:
+            f.write(toml_content)
+            f.flush()
+            
+            try:
+                config = Config.from_file_and_env(f.name)
+                
+                # Environment variable should override the interpolated value
+                assert config.app_name == "Env Override App"
+                # Environment variable should override the interpolated database URL
+                assert config.database.url == "postgresql://env-override"
+                # Values not set in env should use file values
+                assert config.debug is True
+            finally:
+                os.unlink(f.name) 

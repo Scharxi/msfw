@@ -58,7 +58,7 @@ class TestCLIFunctions:
         # Check main.py content
         main_content = (project_path / "main.py").read_text()
         assert "MSFWApplication" in main_content
-        assert "Config" in main_content
+        assert "load_config" in main_content
     
     def test_create_project_existing_directory(self, temp_dir):
         """Test creating project in existing directory."""

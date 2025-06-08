@@ -67,3 +67,12 @@ line-length = 88
 python_version = "3.13"
 warn_return_any = true
 warn_unused_configs = true
+
+[dependency-groups]
+dev = [
+    "httpx>=0.28.1",
+    "pytest>=8.4.0",
+    "pytest-asyncio>=1.0.0",
+    "pytest-cov>=6.1.1",
+    "pytest-mock>=3.14.1",
+]

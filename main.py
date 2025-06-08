@@ -14,20 +14,20 @@ This demonstrates the key features of the MSFW (Modular Microservices Framework)
 import asyncio
 from pathlib import Path
 
-from msfw import MSFWApplication, Config
+from msfw import MSFWApplication, load_config
 
 
 async def main():
     """Main application entry point."""
     print("🚀 Starting MSFW Demo Application")
     
-    # Create configuration
-    config = Config()
-    config.app_name = "MSFW Demo"
-    config.version = "1.0.0"
-    config.debug = True
+    # Load configuration with environment variable support
+    config = load_config()
     
-    # Database configuration
+    # Override specific settings for demo
+    config.app_name = "MSFW Demo"
+    config.version = "1.0.0" 
+    config.debug = True
     config.database.url = "sqlite+aiosqlite:///./demo.db"
     config.database.echo = True
     

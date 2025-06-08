@@ -17,7 +17,7 @@ Features:
 """
 
 from msfw.core.application import MSFWApplication
-from msfw.core.config import Config
+from msfw.core.config import Config, load_config
 from msfw.core.database import Database
 from msfw.core.plugin import Plugin, PluginManager
 from msfw.core.module import Module, ModuleManager
@@ -27,6 +27,7 @@ __version__ = "0.1.0"
 __all__ = [
     "MSFWApplication",
     "Config", 
+    "load_config",
     "Database",
     "Plugin",
     "PluginManager",

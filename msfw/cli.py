@@ -151,12 +151,12 @@ def create_project(path: str) -> None:
     main_content = f'''"""Main application entry point."""
 
 import asyncio
-from msfw import MSFWApplication, Config
+from msfw import MSFWApplication, load_config
 
 async def main():
     """Main application function."""
-    # Load configuration
-    config = Config()
+    # Load configuration with environment variable support
+    config = load_config()
     config.app_name = "{project_dir.name}"
     
     # Create and initialize application
@@ -174,31 +174,40 @@ if __name__ == "__main__":
     
     # Create configuration file
     config_content = '''# MSFW Configuration
+# 
+# Environment Variable Interpolation:
+# Use ${VAR_NAME} for required environment variables
+# Use ${VAR_NAME:default_value} for optional environment variables with defaults
+#
+# Examples:
+# secret_key = "${SECRET_KEY}"                           # Required env var
+# database_url = "${DATABASE_URL:sqlite+aiosqlite:///./app.db}"  # With default
+# debug = "${DEBUG:false}"                              # Boolean with default
 
 # Application settings
-app_name = "My MSFW Application"
-debug = true
-host = "0.0.0.0"
-port = 8000
+app_name = "${APP_NAME:My MSFW Application}"
+debug = "${DEBUG:true}"
+host = "${HOST:0.0.0.0}"
+port = "${PORT:8000}"
 
 # Database settings
 [database]
-url = "sqlite+aiosqlite:///./app.db"
-echo = false
+url = "${DATABASE_URL:sqlite+aiosqlite:///./app.db}"
+echo = "${DATABASE_ECHO:false}"
 
 # Security settings
 [security]
-secret_key = "your-secret-key-change-in-production"
+secret_key = "${SECRET_KEY:your-secret-key-change-in-production}"
 
 # Logging settings
 [logging]
-level = "INFO"
-format = "json"
+level = "${LOG_LEVEL:INFO}"
+format = "${LOG_FORMAT:text}"
 
 # Monitoring settings
 [monitoring]
-enabled = true
-prometheus_enabled = true
+enabled = "${MONITORING_ENABLED:true}"
+prometheus_enabled = "${PROMETHEUS_ENABLED:true}"
 '''
     
     (project_dir / "config" / "settings.toml").write_text(config_content)
@@ -329,13 +338,12 @@ def init(
     main_content = f'''"""Main application entry point for {name}."""
 
 import asyncio
-from msfw import MSFWApplication, Config
+from msfw import MSFWApplication, load_config
 
 async def main():
     """Main application function."""
-    # Load configuration
-    config = Config()
-    config.app_name = "{name}"
+    # Load configuration with environment variable support
+    config = load_config()
     
     # Create and initialize application
     app = MSFWApplication(config)
@@ -352,82 +360,58 @@ if __name__ == "__main__":
     
     # Create configuration file
     config_content = '''# MSFW Configuration
+# 
+# Environment Variable Interpolation:
+# Use ${VAR_NAME} for required environment variables
+# Use ${VAR_NAME:default_value} for optional environment variables with defaults
+#
+# Examples:
+# secret_key = "${SECRET_KEY}"                           # Required env var
+# database_url = "${DATABASE_URL:sqlite+aiosqlite:///./app.db}"  # With default
+# debug = "${DEBUG:false}"                              # Boolean with default
 
 # Application settings
-app_name = "My MSFW Application"
-debug = true
-host = "0.0.0.0"
-port = 8000
+app_name = "${APP_NAME:My MSFW Application}"
+debug = "${DEBUG:true}"
+host = "${HOST:0.0.0.0}"
+port = "${PORT:8000}"
 
 # Database settings
 [database]
-url = "sqlite+aiosqlite:///./app.db"
-echo = false
+url = "${DATABASE_URL:sqlite+aiosqlite:///./app.db}"
+echo = "${DATABASE_ECHO:false}"
 
 # Security settings
 [security]
-secret_key = "your-secret-key-change-in-production"
+secret_key = "${SECRET_KEY:your-secret-key-change-in-production}"
 
 # Logging settings
 [logging]
-level = "INFO"
-format = "json"
+level = "${LOG_LEVEL:INFO}"
+format = "${LOG_FORMAT:text}"
 
 # Monitoring settings
 [monitoring]
-enabled = true
-prometheus_enabled = true
+enabled = "${MONITORING_ENABLED:true}"
+prometheus_enabled = "${PROMETHEUS_ENABLED:true}"
 '''
     
     (project_dir / "config" / "settings.toml").write_text(config_content)
     
-    # Create environment file
-    env_content = '''# Environment variables for MSFW
-MSFW_ENV=development
-SECRET_KEY=your-secret-key-change-in-production
+    # Create environment file template (optional, for local development)
+    env_content = '''# Environment variables for MSFW (optional)
+# The configuration will use defaults from settings.toml if these are not set
+#
+# Uncomment and set the variables you want to override:
+
+# APP_NAME=My MSFW Application
+# DEBUG=true
+# SECRET_KEY=your-secret-key-change-in-production
+# DATABASE_URL=sqlite+aiosqlite:///./app.db
+# LOG_LEVEL=INFO
 '''
     
-    (project_dir / ".env").write_text(env_content)
-    
-    # Create requirements file
-    requirements_content = '''msfw>=0.1.0
-uvicorn[standard]>=0.24.0
-'''
-    
-    (project_dir / "requirements.txt").write_text(requirements_content)
-    
-    # Create README
-    readme_content = f'''# {name}
-
-A microservice built with MSFW (Modular Microservices Framework).
-
-## Setup
-
-1. Install dependencies:
-   ```bash
-   pip install -r requirements.txt
-   ```
-
-2. Run the application:
-   ```bash
-   python main.py
-   ```
-
-## Project Structure
-
-- `main.py` - Application entry point
-- `modules/` - Custom modules
-- `plugins/` - Custom plugins
-- `config/` - Configuration files
-
-## Development
-
-- Health check: http://localhost:8000/health
-- API docs: http://localhost:8000/docs
-- Metrics: http://localhost:8000/metrics
-'''
-    
-    (project_dir / "README.md").write_text(readme_content)
+    (project_dir / ".env.example").write_text(env_content)
     
     console.print(f"[green]✓ Created MSFW project '{name}' in {project_dir}[/green]")
     console.print("\nNext steps:")

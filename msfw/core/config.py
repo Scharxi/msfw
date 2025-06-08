@@ -1,6 +1,7 @@
 """Configuration management for MSFW applications."""
 
 import os
+import re
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
 
@@ -52,11 +53,7 @@ class LoggingConfig(BaseModel):
     """Logging configuration."""
     
     level: str = Field(default="INFO")
-    format: str = Field(default="json")
-    handlers: List[str] = Field(default=["console"])
-    file_path: Optional[str] = Field(default=None)
-    max_file_size: str = Field(default="10MB")
-    backup_count: int = Field(default=5)
+    format: str = Field(default="text")  # "text" or "json"
 
 
 class MonitoringConfig(BaseModel):
@@ -112,18 +109,108 @@ class Config(BaseSettings):
         if not 1 <= v <= 65535:
             raise ValueError('Port must be between 1 and 65535')
         return v
+
+    @staticmethod
+    def _interpolate_env_vars(data: Any) -> Any:
+        """
+        Recursively interpolate environment variables in configuration data.
+        
+        Supports patterns:
+        - ${VAR_NAME} - required variable, will raise error if not found
+        - ${VAR_NAME:default_value} - optional variable with default value
+        """
+        if isinstance(data, str):
+            # Pattern for ${VAR_NAME} or ${VAR_NAME:default}
+            pattern = r'\$\{([^}:]+)(?::([^}]*))?\}'
+            
+            def replace_var(match):
+                var_name = match.group(1)
+                default_value = match.group(2)
+                
+                env_value = os.getenv(var_name)
+                
+                if env_value is not None:
+                    return env_value
+                elif default_value is not None:
+                    return default_value
+                else:
+                    raise ValueError(f"Environment variable '{var_name}' is required but not set")
+            
+            return re.sub(pattern, replace_var, data)
+        
+        elif isinstance(data, dict):
+            return {key: Config._interpolate_env_vars(value) for key, value in data.items()}
+        
+        elif isinstance(data, list):
+            return [Config._interpolate_env_vars(item) for item in data]
+        
+        else:
+            return data
     
     @classmethod
     def from_file(cls, config_path: Union[str, Path]) -> "Config":
-        """Load configuration from file using simple TOML parsing."""
+        """Load configuration from file with environment variable interpolation."""
         import tomllib
         
         config_path = Path(config_path)
         
         with open(config_path, 'rb') as f:
             config_dict = tomllib.load(f)
+        
+        # Interpolate environment variables
+        interpolated_dict = cls._interpolate_env_vars(config_dict)
             
-        return cls(**config_dict)
+        return cls(**interpolated_dict)
+    
+    @classmethod 
+    def from_file_and_env(cls, config_path: Union[str, Path]) -> "Config":
+        """
+        Load configuration from TOML file with environment variable interpolation,
+        then allow environment variables to override any values.
+        
+        This provides the best of both worlds:
+        1. TOML file as the source of truth (can be committed to git)
+        2. Environment variables for sensitive data and deployment-specific overrides
+        3. Environment variable interpolation in TOML for flexibility
+        """
+        if Path(config_path).exists():
+            # Load from file first (with interpolation)
+            config = cls.from_file(config_path)
+            
+            # Create a new instance that will also read from environment
+            # The environment variables will override any file values
+            env_config = cls()
+            
+            # Merge configurations - env takes precedence
+            config_dict = config.model_dump()
+            env_dict = env_config.model_dump()
+            
+            # Deep merge function
+            def deep_merge(base: dict, override: dict) -> dict:
+                for key, value in override.items():
+                    if key in base and isinstance(base[key], dict) and isinstance(value, dict):
+                        base[key] = deep_merge(base[key], value)
+                    else:
+                        # Only override if the env value is different from default
+                        default_config = cls()
+                        default_value = getattr(default_config, key, None)
+                        if hasattr(default_config, key):
+                            if isinstance(default_value, BaseModel):
+                                default_dict = default_value.model_dump()
+                                if value != default_dict:
+                                    base[key] = value
+                            else:
+                                if value != default_value:
+                                    base[key] = value
+                        else:
+                            base[key] = value
+                return base
+            
+            merged_dict = deep_merge(config_dict, env_dict)
+            return cls(**merged_dict)
+        else:
+            # Fallback to environment-only configuration
+            return cls()
     
     def get(self, key: str, default: Any = None) -> Any:
         """Get a configuration value with dot notation support."""
@@ -160,4 +247,26 @@ class Config(BaseSettings):
             if hasattr(self, key):
                 setattr(self, key, value)
             else:
-                self.settings[key] = value 
+                self.settings[key] = value
+
+
+def load_config(config_path: Optional[Union[str, Path]] = None) -> Config:
+    """
+    Convenience function to load configuration.
+    
+    Priority order:
+    1. config_path if provided
+    2. config/settings.toml
+    3. settings.toml  
+    4. Environment variables only
+    """
+    if config_path:
+        return Config.from_file_and_env(config_path)
+    
+    # Try common config file locations
+    for path in ["config/settings.toml", "settings.toml"]:
+        if Path(path).exists():
+            return Config.from_file_and_env(path)
+    
+    # Fallback to environment-only
+    return Config() 
