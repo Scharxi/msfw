@@ -24,6 +24,7 @@ dependencies = [
     "typer>=0.9.0",
     "rich>=13.7.0",
     "greenlet>=3.0.0",
+    "aiohttp>=3.9.0",
 ]
 
 [project.optional-dependencies]
