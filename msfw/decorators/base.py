@@ -194,9 +194,13 @@ class RouteRegistry:
         _route_registry.clear()
     
     @staticmethod
-    def register_routes(router: APIRouter):
-        """Register all routes with a router."""
+    def register_routes(app_or_router):
+        """Register all routes with a router or FastAPI app."""
         for route_info in _route_registry:
+            # Skip versioned routes - they are handled by the version manager
+            if route_info.get("version"):
+                continue
+                
             methods = route_info["methods"]
             path = route_info["path"]
             func = route_info["func"]
@@ -216,15 +220,19 @@ class RouteRegistry:
             
             for method in methods:
                 if method.upper() == "GET":
-                    router.get(path, **route_kwargs)(func)
+                    app_or_router.get(path, **route_kwargs)(func)
                 elif method.upper() == "POST":
-                    router.post(path, **route_kwargs)(func)
+                    app_or_router.post(path, **route_kwargs)(func)
                 elif method.upper() == "PUT":
-                    router.put(path, **route_kwargs)(func)
+                    app_or_router.put(path, **route_kwargs)(func)
                 elif method.upper() == "DELETE":
-                    router.delete(path, **route_kwargs)(func)
+                    app_or_router.delete(path, **route_kwargs)(func)
                 elif method.upper() == "PATCH":
-                    router.patch(path, **route_kwargs)(func)
+                    app_or_router.patch(path, **route_kwargs)(func)
+                elif method.upper() == "HEAD":
+                    app_or_router.head(path, **route_kwargs)(func)
+                elif method.upper() == "OPTIONS":
+                    app_or_router.options(path, **route_kwargs)(func)
 
 
 class MiddlewareRegistry:
