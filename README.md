@@ -555,7 +555,7 @@ Das `examples/` Verzeichnis enthält vollständige Beispiele:
 - [ ] Task Queue Integration (Celery)
 
 ### 📋 Geplant
-- [ ] API Versioning
+- [X] API Versioning
 - [ ] GraphQL Support
 - [ ] WebSocket Support
 - [ ] Enhanced CLI Commands
