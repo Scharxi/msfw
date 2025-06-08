@@ -1234,5 +1234,1069 @@ def test(
         raise typer.Exit(1)
 
 
+# Development Tools Commands
+
+@app.command()
+def generate(
+    type: str = typer.Argument(help="Type to generate: api, model, test, docs"),
+    name: str = typer.Argument(help="Name of the component"),
+    description: str = typer.Option("", help="Description of the component"),
+    output_dir: Optional[str] = typer.Option(None, help="Output directory"),
+):
+    """Generate scaffolding for API endpoints, database models, tests, or documentation."""
+    
+    # Validate component name
+    if not _validate_name(name):
+        console.print("[red]Invalid name. Use only letters, numbers, and underscores, starting with a letter.[/red]")
+        raise typer.Exit(1)
+    
+    # Determine output directory
+    if not output_dir:
+        if type == "api":
+            output_dir = "endpoints"
+        elif type == "model":
+            output_dir = "models"
+        elif type == "test":
+            output_dir = "tests"
+        elif type == "docs":
+            output_dir = "docs"
+        else:
+            console.print(f"[red]Unknown type: {type}. Valid types: api, model, test, docs[/red]")
+            raise typer.Exit(1)
+    
+    output_path = Path(output_dir)
+    output_path.mkdir(parents=True, exist_ok=True)
+    
+    if type == "api":
+        _generate_api_endpoint(name, description, output_path)
+    elif type == "model":
+        _generate_database_model(name, description, output_path)
+    elif type == "test":
+        _generate_test_template(name, description, output_path)
+    elif type == "docs":
+        _generate_documentation_template(name, description, output_path)
+    else:
+        console.print(f"[red]Unknown type: {type}[/red]")
+        raise typer.Exit(1)
+
+
+def _generate_api_endpoint(name: str, description: str, output_path: Path) -> None:
+    """Generate API endpoint scaffolding."""
+    class_name = _to_class_name(name)
+    snake_name = _to_snake_case(name)
+    desc = description or f"{name} API endpoint"
+    
+    endpoint_content = f'''"""
+{class_name} API Endpoint
+{desc}
+"""
+
+from typing import List, Optional
+from fastapi import APIRouter, Depends, HTTPException, status
+from pydantic import BaseModel, Field
+from sqlalchemy.orm import Session
+
+from msfw.core.database import get_db
+from msfw.decorators import versioned_route
+from models.{snake_name} import {class_name}  # Adjust import path as needed
+
+
+router = APIRouter(prefix="/{snake_name}", tags=["{snake_name}"])
+
+
+# Pydantic Models
+class {class_name}Base(BaseModel):
+    """Base {class_name} model."""
+    name: str = Field(..., description="Name of the {snake_name}")
+    description: Optional[str] = Field(None, description="Description of the {snake_name}")
+
+
+class {class_name}Create({class_name}Base):
+    """Create {class_name} model."""
+    pass
+
+
+class {class_name}Update(BaseModel):
+    """Update {class_name} model."""
+    name: Optional[str] = Field(None, description="Name of the {snake_name}")
+    description: Optional[str] = Field(None, description="Description of the {snake_name}")
+
+
+class {class_name}Response({class_name}Base):
+    """Response {class_name} model."""
+    id: int = Field(..., description="Unique identifier")
+    
+    class Config:
+        from_attributes = True
+
+
+# API Routes
+@router.get("/", response_model=List[{class_name}Response])
+@versioned_route("1.0")
+async def get_{snake_name}s(
+    skip: int = 0,
+    limit: int = 100,
+    db: Session = Depends(get_db)
+):
+    """Get all {snake_name}s."""
+    items = db.query({class_name}).offset(skip).limit(limit).all()
+    return items
+
+
+@router.get("/{{item_id}}", response_model={class_name}Response)
+@versioned_route("1.0")
+async def get_{snake_name}(
+    item_id: int,
+    db: Session = Depends(get_db)
+):
+    """Get a specific {snake_name} by ID."""
+    item = db.query({class_name}).filter({class_name}.id == item_id).first()
+    if not item:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"{class_name} not found"
+        )
+    return item
+
+
+@router.post("/", response_model={class_name}Response, status_code=status.HTTP_201_CREATED)
+@versioned_route("1.0")
+async def create_{snake_name}(
+    item: {class_name}Create,
+    db: Session = Depends(get_db)
+):
+    """Create a new {snake_name}."""
+    db_item = {class_name}(**item.dict())
+    db.add(db_item)
+    db.commit()
+    db.refresh(db_item)
+    return db_item
+
+
+@router.put("/{{item_id}}", response_model={class_name}Response)
+@versioned_route("1.0")
+async def update_{snake_name}(
+    item_id: int,
+    item: {class_name}Update,
+    db: Session = Depends(get_db)
+):
+    """Update a {snake_name}."""
+    db_item = db.query({class_name}).filter({class_name}.id == item_id).first()
+    if not db_item:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"{class_name} not found"
+        )
+    
+    update_data = item.dict(exclude_unset=True)
+    for field, value in update_data.items():
+        setattr(db_item, field, value)
+    
+    db.commit()
+    db.refresh(db_item)
+    return db_item
+
+
+@router.delete("/{{item_id}}", status_code=status.HTTP_204_NO_CONTENT)
+@versioned_route("1.0")
+async def delete_{snake_name}(
+    item_id: int,
+    db: Session = Depends(get_db)
+):
+    """Delete a {snake_name}."""
+    db_item = db.query({class_name}).filter({class_name}.id == item_id).first()
+    if not db_item:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"{class_name} not found"
+        )
+    
+    db.delete(db_item)
+    db.commit()
+'''
+    
+    file_path = output_path / f"{snake_name}.py"
+    file_path.write_text(endpoint_content)
+    console.print(f"[green]✓ API endpoint generated: {file_path}[/green]")
+
+
+def _generate_database_model(name: str, description: str, output_path: Path) -> None:
+    """Generate database model scaffolding."""
+    class_name = _to_class_name(name)
+    snake_name = _to_snake_case(name)
+    desc = description or f"{name} database model"
+    
+    model_content = f'''"""
+{class_name} Database Model
+{desc}
+"""
+
+from typing import Optional
+from sqlalchemy import Column, Integer, String, Text, DateTime, Boolean
+from sqlalchemy.sql import func
+
+from msfw.core.database import Base
+
+
+class {class_name}(Base):
+    """
+    {class_name} model.
+    
+    {desc}
+    """
+    __tablename__ = "{snake_name}s"
+    
+    # Primary key
+    id = Column(Integer, primary_key=True, index=True, doc="Unique identifier")
+    
+    # Core fields
+    name = Column(String(255), nullable=False, index=True, doc="Name of the {snake_name}")
+    description = Column(Text, nullable=True, doc="Description of the {snake_name}")
+    
+    # Status and metadata
+    is_active = Column(Boolean, default=True, nullable=False, doc="Whether the {snake_name} is active")
+    
+    # Timestamps
+    created_at = Column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        nullable=False,
+        doc="When the {snake_name} was created"
+    )
+    updated_at = Column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
+        doc="When the {snake_name} was last updated"
+    )
+    
+    def __repr__(self) -> str:
+        return f"<{class_name}(id={{self.id}}, name='{{self.name}}')>"
+    
+    def __str__(self) -> str:
+        return self.name or f"{class_name} {{self.id}}"
+    
+    def to_dict(self) -> dict:
+        """Convert model to dictionary."""
+        return {{
+            "id": self.id,
+            "name": self.name,
+            "description": self.description,
+            "is_active": self.is_active,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+        }}
+'''
+    
+    file_path = output_path / f"{snake_name}.py"
+    file_path.write_text(model_content)
+    console.print(f"[green]✓ Database model generated: {file_path}[/green]")
+
+
+def _generate_test_template(name: str, description: str, output_path: Path) -> None:
+    """Generate test template scaffolding."""
+    class_name = _to_class_name(name)
+    snake_name = _to_snake_case(name)
+    desc = description or f"Tests for {name}"
+    
+    test_content = f'''"""
+Test {class_name}
+{desc}
+"""
+
+import pytest
+import asyncio
+from unittest.mock import Mock, patch, AsyncMock
+from httpx import AsyncClient
+from fastapi import status
+
+from msfw.core.application import MSFWApplication
+
+
+class Test{class_name}:
+    """Test suite for {class_name}."""
+    
+    @pytest.fixture
+    async def app(self):
+        """Create test application."""
+        from msfw import load_config
+        config = load_config()
+        config.testing = True
+        config.database.url = "sqlite+aiosqlite:///:memory:"
+        
+        app = MSFWApplication(config)
+        await app.initialize()
+        return app.app
+    
+    @pytest.fixture
+    async def client(self, app):
+        """Create test client."""
+        async with AsyncClient(app=app, base_url="http://test") as client:
+            yield client
+    
+    @pytest.mark.asyncio
+    async def test_create_{snake_name}(self, client: AsyncClient):
+        """Test creating a {snake_name}."""
+        # Arrange
+        {snake_name}_data = {{
+            "name": "Test {class_name}",
+            "description": "Test description"
+        }}
+        
+        # Act
+        response = await client.post("/{snake_name}/", json={snake_name}_data)
+        
+        # Assert
+        assert response.status_code == status.HTTP_201_CREATED
+        data = response.json()
+        assert data["name"] == {snake_name}_data["name"]
+        assert data["description"] == {snake_name}_data["description"]
+        assert "id" in data
+    
+    @pytest.mark.asyncio
+    async def test_get_{snake_name}s(self, client: AsyncClient):
+        """Test getting all {snake_name}s."""
+        # Act
+        response = await client.get("/{snake_name}/")
+        
+        # Assert
+        assert response.status_code == status.HTTP_200_OK
+        data = response.json()
+        assert isinstance(data, list)
+    
+    @pytest.mark.asyncio
+    async def test_get_{snake_name}_by_id(self, client: AsyncClient):
+        """Test getting a specific {snake_name}."""
+        # Arrange - Create a {snake_name} first
+        {snake_name}_data = {{
+            "name": "Test {class_name}",
+            "description": "Test description"
+        }}
+        create_response = await client.post("/{snake_name}/", json={snake_name}_data)
+        created_item = create_response.json()
+        
+        # Act
+        response = await client.get(f"/{snake_name}/{{created_item['id']}}")
+        
+        # Assert
+        assert response.status_code == status.HTTP_200_OK
+        data = response.json()
+        assert data["id"] == created_item["id"]
+        assert data["name"] == {snake_name}_data["name"]
+    
+    @pytest.mark.asyncio
+    async def test_get_{snake_name}_not_found(self, client: AsyncClient):
+        """Test getting a non-existent {snake_name}."""
+        # Act
+        response = await client.get("/{snake_name}/999999")
+        
+        # Assert
+        assert response.status_code == status.HTTP_404_NOT_FOUND
+    
+    @pytest.mark.asyncio
+    async def test_update_{snake_name}(self, client: AsyncClient):
+        """Test updating a {snake_name}."""
+        # Arrange - Create a {snake_name} first
+        {snake_name}_data = {{
+            "name": "Test {class_name}",
+            "description": "Test description"
+        }}
+        create_response = await client.post("/{snake_name}/", json={snake_name}_data)
+        created_item = create_response.json()
+        
+        update_data = {{
+            "name": "Updated {class_name}",
+            "description": "Updated description"
+        }}
+        
+        # Act
+        response = await client.put(f"/{snake_name}/{{created_item['id']}}", json=update_data)
+        
+        # Assert
+        assert response.status_code == status.HTTP_200_OK
+        data = response.json()
+        assert data["name"] == update_data["name"]
+        assert data["description"] == update_data["description"]
+    
+    @pytest.mark.asyncio
+    async def test_delete_{snake_name}(self, client: AsyncClient):
+        """Test deleting a {snake_name}."""
+        # Arrange - Create a {snake_name} first
+        {snake_name}_data = {{
+            "name": "Test {class_name}",
+            "description": "Test description"
+        }}
+        create_response = await client.post("/{snake_name}/", json={snake_name}_data)
+        created_item = create_response.json()
+        
+        # Act
+        response = await client.delete(f"/{snake_name}/{{created_item['id']}}")
+        
+        # Assert
+        assert response.status_code == status.HTTP_204_NO_CONTENT
+        
+        # Verify it's actually deleted
+        get_response = await client.get(f"/{snake_name}/{{created_item['id']}}")
+        assert get_response.status_code == status.HTTP_404_NOT_FOUND
+
+
+class Test{class_name}Unit:
+    """Unit tests for {class_name} (without database)."""
+    
+    def test_{snake_name}_validation(self):
+        """Test {snake_name} model validation."""
+        # Add unit tests for model validation here
+        pass
+    
+    @patch('your_module.external_service')
+    def test_{snake_name}_with_mock(self, mock_service):
+        """Test {snake_name} with mocked dependencies."""
+        # Arrange
+        mock_service.return_value = "mocked_result"
+        
+        # Act & Assert
+        # Add your test logic here
+        pass
+
+
+class Test{class_name}Integration:
+    """Integration tests for {class_name}."""
+    
+    @pytest.mark.integration
+    async def test_{snake_name}_full_workflow(self):
+        """Test complete {snake_name} workflow."""
+        # Add integration tests here
+        pass
+
+
+class Test{class_name}Performance:
+    """Performance tests for {class_name}."""
+    
+    @pytest.mark.performance
+    async def test_{snake_name}_performance(self):
+        """Test {snake_name} performance under load."""
+        # Add performance tests here
+        pass
+'''
+    
+    file_path = output_path / f"test_{snake_name}.py"
+    file_path.write_text(test_content)
+    console.print(f"[green]✓ Test template generated: {file_path}[/green]")
+
+
+def _generate_documentation_template(name: str, description: str, output_path: Path) -> None:
+    """Generate documentation template."""
+    class_name = _to_class_name(name)
+    snake_name = _to_snake_case(name)
+    desc = description or f"Documentation for {name}"
+    
+    doc_content = f'''# {class_name}
+
+{desc}
+
+## Overview
+
+The {class_name} component provides functionality for [describe the main purpose here].
+
+## Features
+
+- Feature 1: [Description]
+- Feature 2: [Description]
+- Feature 3: [Description]
+
+## Installation
+
+```bash
+# If this is a separate package
+pip install msfw-{snake_name}
+
+# Or if it's part of the main framework
+# Already included in msfw
+```
+
+## Quick Start
+
+```python
+from msfw import MSFWApplication
+from your_module.{snake_name} import {class_name}
+
+# Basic usage example
+{snake_name} = {class_name}()
+```
+
+## API Reference
+
+### {class_name} Class
+
+#### Constructor
+
+```python
+{class_name}(
+    name: str,
+    description: Optional[str] = None,
+    **kwargs
+)
+```
+
+**Parameters:**
+- `name` (str): The name of the {snake_name}
+- `description` (Optional[str]): Optional description
+- `**kwargs`: Additional configuration options
+
+#### Methods
+
+##### `create()`
+
+Creates a new {snake_name}.
+
+```python
+await {snake_name}.create()
+```
+
+**Returns:** {class_name} instance
+
+##### `get(id: int)`
+
+Retrieves a {snake_name} by ID.
+
+```python
+result = await {class_name}.get(id=1)
+```
+
+**Parameters:**
+- `id` (int): The {snake_name} ID
+
+**Returns:** {class_name} instance or None
+
+##### `update(data: dict)`
+
+Updates the {snake_name} with new data.
+
+```python
+await {snake_name}.update({{"name": "New Name"}})
+```
+
+**Parameters:**
+- `data` (dict): Fields to update
+
+##### `delete()`
+
+Deletes the {snake_name}.
+
+```python
+await {snake_name}.delete()
+```
+
+## REST API Endpoints
+
+### GET /{snake_name}/
+
+Get all {snake_name}s.
+
+**Response:**
+```json
+[
+  {{
+    "id": 1,
+    "name": "Example {class_name}",
+    "description": "Example description",
+    "created_at": "2024-01-01T00:00:00Z",
+    "updated_at": "2024-01-01T00:00:00Z"
+  }}
+]
+```
+
+### GET /{snake_name}/{{id}}
+
+Get a specific {snake_name} by ID.
+
+**Parameters:**
+- `id` (int): The {snake_name} ID
+
+**Response:**
+```json
+{{
+  "id": 1,
+  "name": "Example {class_name}",
+  "description": "Example description",
+  "created_at": "2024-01-01T00:00:00Z",
+  "updated_at": "2024-01-01T00:00:00Z"
+}}
+```
+
+### POST /{snake_name}/
+
+Create a new {snake_name}.
+
+**Request Body:**
+```json
+{{
+  "name": "New {class_name}",
+  "description": "Optional description"
+}}
+```
+
+**Response:**
+```json
+{{
+  "id": 2,
+  "name": "New {class_name}",
+  "description": "Optional description",
+  "created_at": "2024-01-01T00:00:00Z",
+  "updated_at": "2024-01-01T00:00:00Z"
+}}
+```
+
+### PUT /{snake_name}/{{id}}
+
+Update an existing {snake_name}.
+
+**Parameters:**
+- `id` (int): The {snake_name} ID
+
+**Request Body:**
+```json
+{{
+  "name": "Updated {class_name}",
+  "description": "Updated description"
+}}
+```
+
+### DELETE /{snake_name}/{{id}}
+
+Delete a {snake_name}.
+
+**Parameters:**
+- `id` (int): The {snake_name} ID
+
+**Response:** 204 No Content
+
+## Configuration
+
+The {class_name} can be configured using the following options:
+
+```toml
+# config.toml
+[{snake_name}]
+enabled = true
+option1 = "value1"
+option2 = "value2"
+```
+
+### Configuration Options
+
+- `enabled` (bool): Whether the {snake_name} is enabled (default: true)
+- `option1` (str): Description of option1
+- `option2` (str): Description of option2
+
+## Examples
+
+### Basic Usage
+
+```python
+from msfw import MSFWApplication, load_config
+from your_module.{snake_name} import {class_name}
+
+async def main():
+    config = load_config()
+    app = MSFWApplication(config)
+    
+    # Create a new {snake_name}
+    {snake_name} = {class_name}(name="My {class_name}")
+    await {snake_name}.create()
+    
+    print(f"Created {snake_name}: {{{snake_name}.id}}")
+
+if __name__ == "__main__":
+    import asyncio
+    asyncio.run(main())
+```
+
+### Advanced Usage
+
+```python
+# Advanced example with custom configuration
+{snake_name} = {class_name}(
+    name="Advanced {class_name}",
+    description="This is an advanced example",
+    custom_option="custom_value"
+)
+
+# Use with context manager
+async with {snake_name}:
+    result = await {snake_name}.perform_operation()
+    print(f"Result: {{result}}")
+```
+
+## Testing
+
+To run tests for {class_name}:
+
+```bash
+# Run all tests
+msfw test
+
+# Run only {snake_name} tests
+pytest tests/test_{snake_name}.py
+
+# Run with coverage
+pytest tests/test_{snake_name}.py --cov={snake_name}
+```
+
+## Error Handling
+
+The {class_name} component raises the following exceptions:
+
+- `{class_name}NotFoundError`: When a {snake_name} is not found
+- `{class_name}ValidationError`: When validation fails
+- `{class_name}OperationError`: When an operation fails
+
+```python
+from your_module.{snake_name} import {class_name}, {class_name}NotFoundError
+
+try:
+    {snake_name} = await {class_name}.get(id=999)
+except {class_name}NotFoundError:
+    print("{class_name} not found")
+```
+
+## Best Practices
+
+1. **Naming**: Use clear, descriptive names for {snake_name}s
+2. **Validation**: Always validate input data
+3. **Error Handling**: Handle exceptions appropriately
+4. **Testing**: Write comprehensive tests
+5. **Documentation**: Keep documentation up to date
+
+## Contributing
+
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes
+4. Add tests
+5. Update documentation
+6. Submit a pull request
+
+## Changelog
+
+### Version 1.0.0
+- Initial release
+- Basic CRUD operations
+- REST API endpoints
+
+## License
+
+This project is licensed under the MIT License - see the LICENSE file for details.
+'''
+    
+    file_path = output_path / f"{snake_name}.md"
+    file_path.write_text(doc_content)
+    console.print(f"[green]✓ Documentation template generated: {file_path}[/green]")
+
+
+@app.command()
+def lint(
+    fix: bool = typer.Option(False, help="Automatically fix issues where possible"),
+    strict: bool = typer.Option(False, help="Use strict linting rules"),
+    format_check: bool = typer.Option(True, help="Check code formatting"),
+    type_check: bool = typer.Option(True, help="Run type checking"),
+    security_check: bool = typer.Option(False, help="Run security checks"),
+    complexity_check: bool = typer.Option(False, help="Check code complexity"),
+    exclude: Optional[str] = typer.Option(None, help="Exclude patterns (comma-separated)"),
+):
+    """Run code quality checks with ruff, black, mypy, and optional security tools."""
+    
+    console.print("[blue]Running code quality checks...[/blue]")
+    
+    # Build exclude patterns
+    exclude_patterns = []
+    if exclude:
+        exclude_patterns = [pattern.strip() for pattern in exclude.split(",")]
+    
+    default_excludes = ["__pycache__", ".git", ".venv", "build", "dist", "*.egg-info"]
+    exclude_patterns.extend(default_excludes)
+    
+    issues_found = False
+    
+    # 1. Ruff linting
+    console.print("\n[cyan]1. Running Ruff linting...[/cyan]")
+    try:
+        ruff_cmd = ["ruff", "check", "."]
+        
+        if fix:
+            ruff_cmd.append("--fix")
+        
+        if strict:
+            ruff_cmd.extend(["--select", "ALL"])
+        
+        if exclude_patterns:
+            exclude_str = ",".join(p for p in exclude_patterns if p.strip())
+            if exclude_str:
+                ruff_cmd.extend(["--exclude", exclude_str])
+        
+        result = subprocess.run(ruff_cmd, capture_output=True, text=True, encoding='utf-8', errors='replace')
+        
+        if result.stdout:
+            console.print(result.stdout)
+        if result.stderr:
+            console.print(f"[yellow]{result.stderr}[/yellow]")
+        
+        if result.returncode != 0:
+            issues_found = True
+            console.print("[red]✗ Ruff found linting issues[/red]")
+        else:
+            console.print("[green]✓ Ruff linting passed[/green]")
+            
+    except FileNotFoundError:
+        console.print("[yellow]⚠ Ruff not found. Install with: pip install ruff[/yellow]")
+    
+    # 2. Black formatting check
+    if format_check:
+        console.print("\n[cyan]2. Running Black formatting check...[/cyan]")
+        try:
+            black_cmd = ["black", "--check", "--diff", "."]
+            
+            if exclude_patterns:
+                valid_patterns = [p for p in exclude_patterns if p.strip()]
+                if valid_patterns:
+                    black_cmd.extend(["--exclude", "|".join(valid_patterns)])
+            
+            result = subprocess.run(black_cmd, capture_output=True, text=True, encoding='utf-8', errors='replace')
+            
+            if result.stdout:
+                console.print(result.stdout)
+            if result.stderr:
+                console.print(f"[yellow]{result.stderr}[/yellow]")
+            
+            if result.returncode != 0:
+                issues_found = True
+                console.print("[red]✗ Black found formatting issues[/red]")
+                if fix:
+                    console.print("[blue]Running Black formatter...[/blue]")
+                    fix_cmd = ["black", "."]
+                    if exclude_patterns:
+                        for pattern in exclude_patterns:
+                            fix_cmd.extend(["--exclude", pattern])
+                    subprocess.run(fix_cmd, encoding='utf-8', errors='replace')
+                    console.print("[green]✓ Code formatted with Black[/green]")
+            else:
+                console.print("[green]✓ Black formatting check passed[/green]")
+                
+        except FileNotFoundError:
+            console.print("[yellow]⚠ Black not found. Install with: pip install black[/yellow]")
+    
+    # 3. MyPy type checking
+    if type_check:
+        console.print("\n[cyan]3. Running MyPy type checking...[/cyan]")
+        try:
+            mypy_cmd = ["mypy", "."]
+            
+            if exclude_patterns:
+                valid_patterns = [p for p in exclude_patterns if p.strip()]
+                if valid_patterns:
+                    exclude_regex = "|".join(valid_patterns)
+                    mypy_cmd.extend(["--exclude", exclude_regex])
+            
+            result = subprocess.run(mypy_cmd, capture_output=True, text=True, encoding='utf-8', errors='replace')
+            
+            if result.stdout:
+                console.print(result.stdout)
+            if result.stderr:
+                console.print(f"[yellow]{result.stderr}[/yellow]")
+            
+            if result.returncode != 0:
+                issues_found = True
+                console.print("[red]✗ MyPy found type issues[/red]")
+            else:
+                console.print("[green]✓ MyPy type checking passed[/green]")
+                
+        except FileNotFoundError:
+            console.print("[yellow]⚠ MyPy not found. Install with: pip install mypy[/yellow]")
+    
+    # 4. Security check with bandit
+    if security_check:
+        console.print("\n[cyan]4. Running Bandit security check...[/cyan]")
+        try:
+            bandit_cmd = ["bandit", "-r", "."]
+            
+            if exclude_patterns:
+                exclude_dirs = [p for p in exclude_patterns if not p.startswith("*.") and p.strip()]
+                if exclude_dirs:
+                    bandit_cmd.extend(["--exclude", ",".join(exclude_dirs)])
+            
+            result = subprocess.run(bandit_cmd, capture_output=True, text=True, encoding='utf-8', errors='replace')
+            
+            if result.stdout:
+                console.print(result.stdout)
+            if result.stderr:
+                console.print(f"[yellow]{result.stderr}[/yellow]")
+            
+            if result.returncode != 0:
+                issues_found = True
+                console.print("[red]✗ Bandit found security issues[/red]")
+            else:
+                console.print("[green]✓ Bandit security check passed[/green]")
+                
+        except FileNotFoundError:
+            console.print("[yellow]⚠ Bandit not found. Install with: pip install bandit[/yellow]")
+    
+    # 5. Complexity check with radon
+    if complexity_check:
+        console.print("\n[cyan]5. Running Radon complexity check...[/cyan]")
+        try:
+            radon_cmd = ["radon", "cc", ".", "-s"]
+            
+            result = subprocess.run(radon_cmd, capture_output=True, text=True, encoding='utf-8', errors='replace')
+            
+            if result.stdout:
+                console.print(result.stdout)
+            if result.stderr:
+                console.print(f"[yellow]{result.stderr}[/yellow]")
+            
+            # Radon doesn't fail on high complexity, just reports it
+            console.print("[green]✓ Radon complexity check completed[/green]")
+                
+        except FileNotFoundError:
+            console.print("[yellow]⚠ Radon not found. Install with: pip install radon[/yellow]")
+    
+    # Summary
+    console.print("\n[cyan]Summary:[/cyan]")
+    if issues_found:
+        console.print("[red]✗ Code quality issues found. Please fix them before committing.[/red]")
+        if not fix:
+            console.print("[yellow]Tip: Use --fix to automatically fix some issues[/yellow]")
+        raise typer.Exit(1)
+    else:
+        console.print("[green]✓ All code quality checks passed![/green]")
+
+
+@app.command()
+def format(
+    check: bool = typer.Option(False, help="Only check formatting, don't make changes"),
+    exclude: Optional[str] = typer.Option(None, help="Exclude patterns (comma-separated)"),
+    line_length: int = typer.Option(88, help="Maximum line length"),
+):
+    """Format code using Black and organize imports with isort."""
+    
+    # Build exclude patterns
+    exclude_patterns = []
+    if exclude:
+        exclude_patterns = [pattern.strip() for pattern in exclude.split(",")]
+    
+    default_excludes = ["__pycache__", ".git", ".venv", "build", "dist", "*.egg-info"]
+    exclude_patterns.extend(default_excludes)
+    
+    if check:
+        console.print("[blue]Checking code formatting...[/blue]")
+    else:
+        console.print("[blue]Formatting code...[/blue]")
+    
+    issues_found = False
+    
+    # 1. Run isort for import organization
+    console.print("\n[cyan]1. Organizing imports with isort...[/cyan]")
+    try:
+        isort_cmd = ["isort", "."]
+        
+        if check:
+            isort_cmd.extend(["--check-only", "--diff"])
+        
+        if exclude_patterns:
+            valid_patterns = [p for p in exclude_patterns if p.strip()]
+            if valid_patterns:
+                isort_cmd.extend(["--skip", ",".join(valid_patterns)])
+        
+        result = subprocess.run(isort_cmd, capture_output=True, text=True, encoding='utf-8', errors='replace')
+        
+        if result.stdout:
+            console.print(result.stdout)
+        if result.stderr:
+            console.print(f"[yellow]{result.stderr}[/yellow]")
+        
+        if result.returncode != 0:
+            issues_found = True
+            if check:
+                console.print("[red]✗ isort found import organization issues[/red]")
+            else:
+                console.print("[red]✗ isort failed to organize imports[/red]")
+        else:
+            console.print("[green]✓ Import organization completed[/green]")
+            
+    except FileNotFoundError:
+        console.print("[yellow]⚠ isort not found. Install with: pip install isort[/yellow]")
+    
+    # 2. Run Black for code formatting
+    console.print("\n[cyan]2. Formatting code with Black...[/cyan]")
+    try:
+        black_cmd = ["black", ".", f"--line-length={line_length}"]
+        
+        if check:
+            black_cmd.extend(["--check", "--diff"])
+        
+        if exclude_patterns:
+            valid_patterns = [p for p in exclude_patterns if p.strip()]
+            if valid_patterns:
+                black_cmd.extend(["--exclude", "|".join(valid_patterns)])
+        
+        result = subprocess.run(black_cmd, capture_output=True, text=True, encoding='utf-8', errors='replace')
+        
+        if result.stdout:
+            console.print(result.stdout)
+        if result.stderr:
+            console.print(f"[yellow]{result.stderr}[/yellow]")
+        
+        if result.returncode != 0:
+            issues_found = True
+            if check:
+                console.print("[red]✗ Black found formatting issues[/red]")
+            else:
+                console.print("[red]✗ Black failed to format code[/red]")
+        else:
+            console.print("[green]✓ Code formatting completed[/green]")
+            
+    except FileNotFoundError:
+        console.print("[yellow]⚠ Black not found. Install with: pip install black[/yellow]")
+    
+    # 3. Run additional formatting tools
+    console.print("\n[cyan]3. Running additional formatting checks...[/cyan]")
+    
+    # Check for trailing whitespace and fix if not in check mode
+    try:
+        if not check:
+            # Remove trailing whitespace
+            for py_file in Path(".").rglob("*.py"):
+                if any(exclude in str(py_file) for exclude in exclude_patterns):
+                    continue
+                
+                content = py_file.read_text(encoding="utf-8")
+                lines = content.splitlines()
+                cleaned_lines = [line.rstrip() for line in lines]
+                
+                if lines != cleaned_lines:
+                    py_file.write_text("\n".join(cleaned_lines) + "\n", encoding="utf-8")
+                    console.print(f"[green]✓ Removed trailing whitespace from {py_file}[/green]")
+        
+        console.print("[green]✓ Additional formatting checks completed[/green]")
+        
+    except Exception as e:
+        console.print(f"[yellow]⚠ Additional formatting checks failed: {e}[/yellow]")
+    
+    # Summary
+    console.print("\n[cyan]Summary:[/cyan]")
+    if issues_found:
+        if check:
+            console.print("[red]✗ Code formatting issues found. Run 'msfw format' to fix them.[/red]")
+            raise typer.Exit(1)
+        else:
+            console.print("[red]✗ Some formatting operations failed.[/red]")
+            raise typer.Exit(1)
+    else:
+        if check:
+            console.print("[green]✓ Code formatting is consistent![/green]")
+        else:
+            console.print("[green]✓ Code formatted successfully![/green]")
+
+
 if __name__ == "__main__":
     app() 
