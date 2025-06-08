@@ -1,0 +1,189 @@
+/* Custom CSS for MSFW Documentation */
+
+/* Improve code block styling */
+.highlight {
+    border-radius: 6px;
+    border: 1px solid #e1e4e8;
+}
+
+/* Custom admonition styling */
+.admonition {
+    border-radius: 6px;
+    border-left: 4px solid #007acc;
+    margin: 1em 0;
+    padding: 1em;
+}
+
+.admonition.tip {
+    border-left-color: #28a745;
+}
+
+.admonition.note {
+    border-left-color: #007bff;
+}
+
+.admonition.warning {
+    border-left-color: #ffc107;
+}
+
+.admonition.danger {
+    border-left-color: #dc3545;
+}
+
+/* Improve table styling */
+table.docutils {
+    border-collapse: collapse;
+    border: 1px solid #e1e4e8;
+    border-radius: 6px;
+    overflow: hidden;
+}
+
+table.docutils th {
+    background-color: #f6f8fa;
+    border-bottom: 2px solid #e1e4e8;
+    font-weight: 600;
+}
+
+table.docutils td,
+table.docutils th {
+    border: 1px solid #e1e4e8;
+    padding: 8px 12px;
+}
+
+/* Language selector styling */
+.language-selector {
+    position: fixed;
+    top: 10px;
+    right: 10px;
+    z-index: 1000;
+    background: #fff;
+    border: 1px solid #e1e4e8;
+    border-radius: 6px;
+    padding: 8px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.language-selector a {
+    display: inline-block;
+    padding: 4px 8px;
+    margin: 0 2px;
+    text-decoration: none;
+    border-radius: 4px;
+    transition: background-color 0.2s;
+}
+
+.language-selector a:hover {
+    background-color: #f6f8fa;
+}
+
+.language-selector a.current {
+    background-color: #007acc;
+    color: white;
+}
+
+/* Improve navigation */
+.wy-nav-side {
+    background: #f8f9fa;
+}
+
+.wy-menu-vertical a {
+    color: #24292e;
+}
+
+.wy-menu-vertical a:hover {
+    background-color: #e1e4e8;
+}
+
+/* Code syntax highlighting improvements */
+.highlight .k { color: #d73a49; } /* Keywords */
+.highlight .s { color: #032f62; } /* Strings */
+.highlight .c { color: #6a737d; } /* Comments */
+.highlight .n { color: #24292e; } /* Names */
+.highlight .o { color: #d73a49; } /* Operators */
+
+/* Version selector */
+.version-selector {
+    background: #f6f8fa;
+    border: 1px solid #e1e4e8;
+    border-radius: 6px;
+    padding: 4px 8px;
+    margin: 10px 0;
+}
+
+/* Emoji support */
+.emoji {
+    height: 1.2em;
+    width: 1.2em;
+    vertical-align: middle;
+}
+
+/* Responsive improvements */
+@media (max-width: 768px) {
+    .language-selector {
+        position: static;
+        width: 100%;
+        margin-bottom: 1em;
+    }
+    
+    .wy-nav-side {
+        left: -300px;
+    }
+}
+
+/* Footer styling */
+.footer {
+    text-align: center;
+    padding: 20px;
+    border-top: 1px solid #e1e4e8;
+    margin-top: 40px;
+    color: #6a737d;
+}
+
+/* Search box improvements */
+.wy-side-nav-search input[type=text] {
+    border-radius: 6px;
+    border: 1px solid #e1e4e8;
+}
+
+/* Breadcrumb styling */
+.wy-breadcrumbs li {
+    display: inline-block;
+}
+
+.wy-breadcrumbs li:not(:last-child):after {
+    content: " / ";
+    color: #6a737d;
+}
+
+/* Code copy button styling */
+.highlight .copybutton {
+    background: #f6f8fa;
+    border: 1px solid #e1e4e8;
+    border-radius: 4px;
+    color: #24292e;
+    cursor: pointer;
+    font-size: 12px;
+    padding: 4px 8px;
+    position: absolute;
+    right: 8px;
+    top: 8px;
+    transition: all 0.2s;
+}
+
+.highlight .copybutton:hover {
+    background: #e1e4e8;
+}
+
+/* Print styles */
+@media print {
+    .wy-nav-side,
+    .wy-nav-top,
+    .language-selector,
+    .copybutton {
+        display: none !important;
+    }
+    
+    .wy-nav-content-wrap {
+        margin-left: 0 !important;
+    }
+} 
