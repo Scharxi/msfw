@@ -13,7 +13,7 @@ install-dev: ## Install development dependencies
 	uv pip install -e ".[dev,test]"
 
 test: ## Run all tests
-	uv run pytest 
+	uv run pytest --tb=no -q 
 
 test-unit: ## Run unit tests only
 	uv run pytest -m unit
