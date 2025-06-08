@@ -20,6 +20,7 @@ from msfw.core.plugin import Plugin, PluginManager, PREDEFINED_HOOKS
 from msfw.middleware.logging import LoggingMiddleware
 from msfw.middleware.monitoring import MonitoringMiddleware
 from msfw.middleware.security import SecurityMiddleware
+from msfw.sdk import ServiceSDK
 
 
 # Metrics registry will be handled in middleware to avoid import-time registration
@@ -35,6 +36,7 @@ class MSFWApplication:
         self.database: Optional[Database] = None
         self.module_manager: Optional[ModuleManager] = None
         self.plugin_manager: Optional[PluginManager] = None
+        self.sdk: Optional[ServiceSDK] = None
         self._initialized = False
         self._pending_modules: list = []  # For modules added before init
         self._pending_plugins: list = []  # For plugins added before init
@@ -118,6 +120,9 @@ class MSFWApplication:
         # Setup module manager
         self.module_manager = ModuleManager(self.config)
         
+        # Setup service SDK
+        self.sdk = ServiceSDK(config=self.config)
+        
         # Setup middleware
         self._setup_middleware()
         
@@ -143,6 +148,18 @@ class MSFWApplication:
         # Initialize plugins for tests (since TestClient doesn't trigger lifespan)
         if self.plugin_manager:
             await self.plugin_manager.initialize_plugins()
+        
+        # Auto-register service if enabled
+        if hasattr(self.config, 'app_name') and self.sdk:
+            try:
+                await self.sdk.register_current_service(
+                    service_name=self.config.app_name,
+                    version=getattr(self.config, 'version', '1.0.0'),
+                    host=self.config.host,
+                    port=self.config.port
+                )
+            except Exception as e:
+                structlog.get_logger().warning(f"Failed to auto-register service: {e}")
         
         # Initialize module context early so it's available for tests
         if self.module_manager and self.database:
@@ -349,6 +366,10 @@ class MSFWApplication:
         if self.database:
             await self.database.close()
         
+        # Shutdown SDK
+        if self.sdk:
+            await self.sdk.shutdown()
+        
         logger.info("MSFW application shut down successfully")
     
     def register_module(self, module: Module) -> None:
@@ -392,6 +413,10 @@ class MSFWApplication:
         # Close database
         if self.database:
             await self.database.close()
+        
+        # Shutdown SDK
+        if self.sdk:
+            await self.sdk.shutdown()
         
         self._initialized = False
         logger.info("MSFW application cleanup completed")
