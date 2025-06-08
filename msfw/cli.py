@@ -172,8 +172,8 @@ if __name__ == "__main__":
     
     (project_dir / "main.py").write_text(main_content)
     
-    # Create configuration file
-    config_content = '''# MSFW Configuration
+    # Create configuration file with microservice support
+    config_content = '''# MSFW Configuration with Microservice Support
 # 
 # Environment Variable Interpolation:
 # Use ${VAR_NAME} for required environment variables
@@ -189,25 +189,81 @@ app_name = "${APP_NAME:My MSFW Application}"
 debug = "${DEBUG:true}"
 host = "${HOST:0.0.0.0}"
 port = "${PORT:8000}"
+environment = "${ENVIRONMENT:development}"
 
-# Database settings
+# Global Database settings (defaults for all services)
 [database]
 url = "${DATABASE_URL:sqlite+aiosqlite:///./app.db}"
 echo = "${DATABASE_ECHO:false}"
 
-# Security settings
+# Global Security settings
 [security]
 secret_key = "${SECRET_KEY:your-secret-key-change-in-production}"
 
-# Logging settings
+# Global Logging settings
 [logging]
 level = "${LOG_LEVEL:INFO}"
 format = "${LOG_FORMAT:text}"
 
-# Monitoring settings
+# Global Monitoring settings
 [monitoring]
 enabled = "${MONITORING_ENABLED:true}"
 prometheus_enabled = "${PROMETHEUS_ENABLED:true}"
+
+# Microservice-specific configurations
+[services.api]
+enabled = true
+host = "${API_HOST:0.0.0.0}"
+port = "${API_PORT:8000}"
+debug = "${API_DEBUG:true}"
+
+[services.api.database]
+url = "${API_DATABASE_URL:sqlite+aiosqlite:///./api.db}"
+
+[services.worker]
+enabled = "${WORKER_ENABLED:false}"
+host = "${WORKER_HOST:0.0.0.0}"
+port = "${WORKER_PORT:8001}"
+
+[services.worker.redis]
+url = "${WORKER_REDIS_URL:redis://localhost:6379/1}"
+
+# Environment-specific configurations
+[environments.development]
+debug = true
+log_level = "DEBUG"
+
+[environments.development.database]
+echo = true
+
+[environments.development.services.api]
+debug = true
+workers = 1
+
+[environments.development.services.worker]
+enabled = false
+
+[environments.production]
+debug = false
+log_level = "WARNING"
+
+[environments.production.database]
+echo = false
+pool_size = 20
+
+[environments.production.services.api]
+debug = false
+workers = 4
+
+[environments.production.services.worker]
+enabled = true
+workers = 2
+
+[environments.production.services.api.database]
+url = "${PROD_API_DATABASE_URL:postgresql://db:5432/api}"
+
+[environments.production.services.worker.redis]
+url = "${PROD_WORKER_REDIS_URL:redis://redis:6379/0}"
 '''
     
     (project_dir / "config" / "settings.toml").write_text(config_content)
@@ -358,8 +414,8 @@ if __name__ == "__main__":
     
     (project_dir / "main.py").write_text(main_content)
     
-    # Create configuration file
-    config_content = '''# MSFW Configuration
+    # Create configuration file with microservice support
+    config_content = '''# MSFW Configuration with Microservice Support
 # 
 # Environment Variable Interpolation:
 # Use ${VAR_NAME} for required environment variables
@@ -375,25 +431,81 @@ app_name = "${APP_NAME:My MSFW Application}"
 debug = "${DEBUG:true}"
 host = "${HOST:0.0.0.0}"
 port = "${PORT:8000}"
+environment = "${ENVIRONMENT:development}"
 
-# Database settings
+# Global Database settings (defaults for all services)
 [database]
 url = "${DATABASE_URL:sqlite+aiosqlite:///./app.db}"
 echo = "${DATABASE_ECHO:false}"
 
-# Security settings
+# Global Security settings
 [security]
 secret_key = "${SECRET_KEY:your-secret-key-change-in-production}"
 
-# Logging settings
+# Global Logging settings
 [logging]
 level = "${LOG_LEVEL:INFO}"
 format = "${LOG_FORMAT:text}"
 
-# Monitoring settings
+# Global Monitoring settings
 [monitoring]
 enabled = "${MONITORING_ENABLED:true}"
 prometheus_enabled = "${PROMETHEUS_ENABLED:true}"
+
+# Microservice-specific configurations
+[services.api]
+enabled = true
+host = "${API_HOST:0.0.0.0}"
+port = "${API_PORT:8000}"
+debug = "${API_DEBUG:true}"
+
+[services.api.database]
+url = "${API_DATABASE_URL:sqlite+aiosqlite:///./api.db}"
+
+[services.worker]
+enabled = "${WORKER_ENABLED:false}"
+host = "${WORKER_HOST:0.0.0.0}"
+port = "${WORKER_PORT:8001}"
+
+[services.worker.redis]
+url = "${WORKER_REDIS_URL:redis://localhost:6379/1}"
+
+# Environment-specific configurations
+[environments.development]
+debug = true
+log_level = "DEBUG"
+
+[environments.development.database]
+echo = true
+
+[environments.development.services.api]
+debug = true
+workers = 1
+
+[environments.development.services.worker]
+enabled = false
+
+[environments.production]
+debug = false
+log_level = "WARNING"
+
+[environments.production.database]
+echo = false
+pool_size = 20
+
+[environments.production.services.api]
+debug = false
+workers = 4
+
+[environments.production.services.worker]
+enabled = true
+workers = 2
+
+[environments.production.services.api.database]
+url = "${PROD_API_DATABASE_URL:postgresql://db:5432/api}"
+
+[environments.production.services.worker.redis]
+url = "${PROD_WORKER_REDIS_URL:redis://redis:6379/0}"
 '''
     
     (project_dir / "config" / "settings.toml").write_text(config_content)
@@ -404,11 +516,31 @@ prometheus_enabled = "${PROMETHEUS_ENABLED:true}"
 #
 # Uncomment and set the variables you want to override:
 
-# APP_NAME=My MSFW Application
+# General settings
+# APP_NAME=My Custom App
 # DEBUG=true
-# SECRET_KEY=your-secret-key-change-in-production
-# DATABASE_URL=sqlite+aiosqlite:///./app.db
-# LOG_LEVEL=INFO
+# ENVIRONMENT=development
+
+# Database
+# DATABASE_URL=postgresql://localhost/myapp
+# SECRET_KEY=your-dev-secret-key
+
+# API Service
+# API_HOST=0.0.0.0
+# API_PORT=8000
+# API_DEBUG=true
+# API_DATABASE_URL=postgresql://localhost/api_db
+
+# Worker Service
+# WORKER_ENABLED=true
+# WORKER_HOST=0.0.0.0
+# WORKER_PORT=8001
+# WORKER_REDIS_URL=redis://localhost:6379/1
+
+# Production overrides (set in deployment)
+# ENVIRONMENT=production
+# PROD_API_DATABASE_URL=postgresql://prod-db:5432/api
+# PROD_WORKER_REDIS_URL=redis://prod-redis:6379/0
 '''
     
     (project_dir / ".env.example").write_text(env_content)

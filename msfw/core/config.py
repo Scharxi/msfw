@@ -65,6 +65,53 @@ class MonitoringConfig(BaseModel):
     health_check_path: str = Field(default="/health")
 
 
+class ServiceConfig(BaseModel):
+    """Configuration for a single microservice."""
+    
+    enabled: bool = Field(default=True)
+    host: str = Field(default="0.0.0.0")
+    port: int = Field(default=8000)
+    workers: int = Field(default=1)
+    debug: bool = Field(default=False)
+    
+    # Service-specific components
+    database: Optional[DatabaseConfig] = Field(default=None)
+    redis: Optional[RedisConfig] = Field(default=None)
+    security: Optional[SecurityConfig] = Field(default=None)
+    cors: Optional[CorsConfig] = Field(default=None)
+    logging: Optional[LoggingConfig] = Field(default=None)
+    monitoring: Optional[MonitoringConfig] = Field(default=None)
+    
+    # Custom settings per service
+    settings: Dict[str, Any] = Field(default_factory=dict)
+    
+    @field_validator('port')
+    @classmethod
+    def validate_port(cls, v):
+        if not 1 <= v <= 65535:
+            raise ValueError('Port must be between 1 and 65535')
+        return v
+
+
+class EnvironmentConfig(BaseModel):
+    """Configuration for a specific environment (dev, prod, etc.)."""
+    
+    # Global settings for this environment
+    debug: bool = Field(default=False)
+    log_level: str = Field(default="INFO")
+    
+    # Service configurations in this environment
+    services: Dict[str, ServiceConfig] = Field(default_factory=dict)
+    
+    # Global component configurations
+    database: Optional[DatabaseConfig] = Field(default=None)
+    redis: Optional[RedisConfig] = Field(default=None)
+    security: Optional[SecurityConfig] = Field(default=None)
+    cors: Optional[CorsConfig] = Field(default=None)
+    logging: Optional[LoggingConfig] = Field(default=None)
+    monitoring: Optional[MonitoringConfig] = Field(default=None)
+
+
 class Config(BaseSettings):
     """Main application configuration."""
     
@@ -77,13 +124,22 @@ class Config(BaseSettings):
     port: int = Field(default=8000)
     workers: int = Field(default=1)
     
-    # Component configurations
+    # Environment selection
+    environment: str = Field(default="development")
+    
+    # Component configurations (global defaults)
     database: DatabaseConfig = Field(default_factory=DatabaseConfig)
     redis: RedisConfig = Field(default_factory=RedisConfig)
     security: SecurityConfig = Field(default_factory=SecurityConfig)
     cors: CorsConfig = Field(default_factory=CorsConfig)
     logging: LoggingConfig = Field(default_factory=LoggingConfig)
     monitoring: MonitoringConfig = Field(default_factory=MonitoringConfig)
+    
+    # Environment-specific configurations
+    environments: Dict[str, EnvironmentConfig] = Field(default_factory=dict)
+    
+    # Microservice configurations
+    services: Dict[str, ServiceConfig] = Field(default_factory=dict)
     
     # Module and plugin settings
     modules_dir: str = Field(default="modules")
@@ -109,6 +165,56 @@ class Config(BaseSettings):
         if not 1 <= v <= 65535:
             raise ValueError('Port must be between 1 and 65535')
         return v
+
+    def get_service_config(self, service_name: str) -> ServiceConfig:
+        """Get configuration for a specific service, with environment overrides."""
+        # Start with global service config
+        service_config = self.services.get(service_name)
+        
+        if not service_config:
+            # Create default service config
+            service_config = ServiceConfig()
+        
+        # Apply environment-specific overrides
+        env_config = self.environments.get(self.environment)
+        if env_config and service_name in env_config.services:
+            env_service_config = env_config.services[service_name]
+            
+            # Merge configurations - environment takes precedence
+            merged_data = service_config.model_dump()
+            env_data = env_service_config.model_dump(exclude_unset=True)
+            
+            # Deep merge
+            def deep_merge(base: dict, override: dict) -> dict:
+                for key, value in override.items():
+                    if key in base and isinstance(base[key], dict) and isinstance(value, dict):
+                        base[key] = deep_merge(base[key], value)
+                    elif value is not None:
+                        base[key] = value
+                return base
+            
+            merged_data = deep_merge(merged_data, env_data)
+            service_config = ServiceConfig(**merged_data)
+        
+        # Apply global component defaults if service doesn't have them
+        if service_config.database is None:
+            service_config.database = self.database
+        if service_config.redis is None:
+            service_config.redis = self.redis
+        if service_config.security is None:
+            service_config.security = self.security
+        if service_config.cors is None:
+            service_config.cors = self.cors
+        if service_config.logging is None:
+            service_config.logging = self.logging
+        if service_config.monitoring is None:
+            service_config.monitoring = self.monitoring
+            
+        return service_config
+
+    def get_current_environment_config(self) -> Optional[EnvironmentConfig]:
+        """Get the configuration for the current environment."""
+        return self.environments.get(self.environment)
 
     @staticmethod
     def _interpolate_env_vars(data: Any) -> Any:
