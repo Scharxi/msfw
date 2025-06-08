@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 from msfw.core.config import Config
 from msfw.core.module import Module, ModuleContext, ModuleManager, ModuleMetadata
-from tests.conftest import TestModule
+from tests.conftest import MockModule
 
 # Mark all async tests in this module
 pytestmark = pytest.mark.asyncio
@@ -155,7 +155,7 @@ class TestModuleContext:
 class TestModuleBase:
     """Test base module functionality."""
     
-    def test_module_properties(self, test_module: TestModule):
+    def test_module_properties(self, test_module: MockModule):
         """Test module properties."""
         assert test_module.name == "test_module"
         assert test_module.version == "1.0.0"
@@ -163,7 +163,7 @@ class TestModuleBase:
         assert test_module.dependencies == []
         assert test_module.is_initialized is False
     
-    async def test_module_initialization(self, test_module: TestModule):
+    async def test_module_initialization(self, test_module: MockModule):
         """Test module initialization."""
         # Create mock context
         mock_context = MagicMock(spec=ModuleContext)
@@ -177,7 +177,7 @@ class TestModuleBase:
         assert test_module.metadata is not None
         assert test_module.metadata.name == "test_module"
     
-    def test_route_registration(self, test_module: TestModule):
+    def test_route_registration(self, test_module: MockModule):
         """Test route registration."""
         router = MagicMock(spec=APIRouter)
         
@@ -187,7 +187,7 @@ class TestModuleBase:
         # Verify router methods were called
         router.get.assert_called()
     
-    async def test_module_cleanup(self, test_module: TestModule):
+    async def test_module_cleanup(self, test_module: MockModule):
         """Test module cleanup."""
         # Initialize first
         mock_context = MagicMock(spec=ModuleContext)
@@ -230,7 +230,7 @@ class TestModuleManager:
         """Create a module manager."""
         return ModuleManager(test_config)
     
-    def test_module_registration(self, manager: ModuleManager, test_module: TestModule):
+    def test_module_registration(self, manager: ModuleManager, test_module: MockModule):
         """Test module registration."""
         # Register module
         manager.register_module(test_module)
@@ -239,7 +239,7 @@ class TestModuleManager:
         assert manager.get_module("test_module") == test_module
         assert "test_module" in manager.list_modules()
     
-    def test_duplicate_module_registration(self, manager: ModuleManager, test_module: TestModule):
+    def test_duplicate_module_registration(self, manager: ModuleManager, test_module: MockModule):
         """Test duplicate module registration."""
         # Register module
         manager.register_module(test_module)
@@ -248,7 +248,7 @@ class TestModuleManager:
         with pytest.raises(ValueError, match="Module 'test_module' already registered"):
             manager.register_module(test_module)
     
-    def test_module_removal(self, manager: ModuleManager, test_module: TestModule):
+    def test_module_removal(self, manager: ModuleManager, test_module: MockModule):
         """Test module removal."""
         # Register and then remove
         manager.register_module(test_module)
@@ -261,7 +261,7 @@ class TestModuleManager:
     async def test_module_initialization_order(self, manager: ModuleManager):
         """Test module initialization with dependencies."""
         # Create modules with dependencies
-        base_module = TestModule()
+        base_module = MockModule()
         dependent_module = DependentModule()
         
         # Register in reverse order
@@ -294,7 +294,7 @@ class TestModuleManager:
                 return ["circular_module"]
         
         # CircularDependencyModule already depends on "dependent_module"
-        base_module = TestModule()
+        base_module = MockModule()
         dependent_module = TestDependentModule()
         circular_module = CircularDependencyModule()
         
@@ -310,7 +310,7 @@ class TestModuleManager:
         with pytest.raises(ValueError, match="Circular dependency detected"):
             await manager.initialize_modules()
     
-    async def test_module_cleanup(self, manager: ModuleManager, test_module: TestModule):
+    async def test_module_cleanup(self, manager: ModuleManager, test_module: MockModule):
         """Test module cleanup."""
         manager.register_module(test_module)
         
@@ -323,7 +323,7 @@ class TestModuleManager:
         
         # Should not raise errors
     
-    async def test_route_registration(self, manager: ModuleManager, test_module: TestModule):
+    async def test_route_registration(self, manager: ModuleManager, test_module: MockModule):
         """Test route registration from modules."""
         # Set up context and initialize module first
         mock_context = MagicMock(spec=ModuleContext)
@@ -340,7 +340,7 @@ class TestModuleManager:
         # Verify router was included
         mock_app.include_router.assert_called()
     
-    def test_middleware_registration(self, manager: ModuleManager, test_module: TestModule):
+    def test_middleware_registration(self, manager: ModuleManager, test_module: MockModule):
         """Test middleware registration from modules."""
         mock_app = MagicMock()
         manager.register_module(test_module)
@@ -348,7 +348,7 @@ class TestModuleManager:
         # Should not raise errors even if module doesn't register middleware
         manager.register_all_middleware(mock_app)
     
-    def test_dependency_registration(self, manager: ModuleManager, test_module: TestModule):
+    def test_dependency_registration(self, manager: ModuleManager, test_module: MockModule):
         """Test dependency registration from modules."""
         manager.register_module(test_module)
         
@@ -365,7 +365,7 @@ class TestModuleDependencies:
         """Test simple dependency ordering."""
         manager = ModuleManager(Config())
         
-        base_module = TestModule()
+        base_module = MockModule()
         dependent_module = DependentModule()
         
         manager.register_module(dependent_module)

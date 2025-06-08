@@ -5,7 +5,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 from msfw.core.config import Config
 from msfw.core.plugin import Plugin, PluginHook, PluginManager, PluginMetadata
-from tests.conftest import TestPlugin
+from tests.conftest import MockPlugin
 
 # Individual async tests are marked with @pytest.mark.asyncio
 
@@ -146,7 +146,7 @@ class TestPluginHook:
 class TestPluginBase:
     """Test base plugin functionality."""
     
-    def test_plugin_properties(self, test_plugin: TestPlugin):
+    def test_plugin_properties(self, test_plugin: MockPlugin):
         """Test plugin properties."""
         assert test_plugin.name == "test_plugin"
         assert test_plugin.version == "1.0.0"
@@ -157,7 +157,7 @@ class TestPluginBase:
         assert test_plugin.initialized is False
     
     @pytest.mark.asyncio
-    async def test_plugin_initialization(self, test_plugin: TestPlugin):
+    async def test_plugin_initialization(self, test_plugin: MockPlugin):
         """Test plugin initialization."""
         config = Config()
         
@@ -171,7 +171,7 @@ class TestPluginBase:
         assert test_plugin.metadata.name == "test_plugin"
     
     @pytest.mark.asyncio
-    async def test_plugin_cleanup(self, test_plugin: TestPlugin):
+    async def test_plugin_cleanup(self, test_plugin: MockPlugin):
         """Test plugin cleanup."""
         config = Config()
         await test_plugin.initialize(config)
@@ -181,7 +181,7 @@ class TestPluginBase:
         
         assert test_plugin.cleanup_called is True
     
-    def test_plugin_enable_disable(self, test_plugin: TestPlugin):
+    def test_plugin_enable_disable(self, test_plugin: MockPlugin):
         """Test plugin enable/disable."""
         assert test_plugin.enabled is True
         
@@ -191,7 +191,7 @@ class TestPluginBase:
         test_plugin.enable()
         assert test_plugin.enabled is True
     
-    def test_hook_registration(self, test_plugin: TestPlugin):
+    def test_hook_registration(self, test_plugin: MockPlugin):
         """Test hook registration in plugin."""
         handler = MagicMock()
         
@@ -211,7 +211,7 @@ class TestPluginManager:
         """Create a plugin manager."""
         return PluginManager(test_config)
     
-    def test_plugin_registration(self, manager: PluginManager, test_plugin: TestPlugin):
+    def test_plugin_registration(self, manager: PluginManager, test_plugin: MockPlugin):
         """Test plugin registration."""
         # Register plugin
         manager.register_plugin(test_plugin)
@@ -221,7 +221,7 @@ class TestPluginManager:
         assert "test_plugin" in manager.list_plugins()
         assert "test_plugin" in manager.list_enabled_plugins()
     
-    def test_duplicate_plugin_registration(self, manager: PluginManager, test_plugin: TestPlugin):
+    def test_duplicate_plugin_registration(self, manager: PluginManager, test_plugin: MockPlugin):
         """Test duplicate plugin registration."""
         # Register plugin
         manager.register_plugin(test_plugin)
@@ -230,7 +230,7 @@ class TestPluginManager:
         with pytest.raises(ValueError, match="Plugin 'test_plugin' already registered"):
             manager.register_plugin(test_plugin)
     
-    def test_plugin_enable_disable(self, manager: PluginManager, test_plugin: TestPlugin):
+    def test_plugin_enable_disable(self, manager: PluginManager, test_plugin: MockPlugin):
         """Test plugin enable/disable through manager."""
         manager.register_plugin(test_plugin)
         
@@ -244,7 +244,7 @@ class TestPluginManager:
         assert test_plugin.enabled is True
         assert "test_plugin" in manager.list_enabled_plugins()
     
-    def test_plugin_removal(self, manager: PluginManager, test_plugin: TestPlugin):
+    def test_plugin_removal(self, manager: PluginManager, test_plugin: MockPlugin):
         """Test plugin removal."""
         manager.register_plugin(test_plugin)
         assert "test_plugin" in manager.list_plugins()
@@ -317,7 +317,7 @@ class TestPluginManager:
         assert low_priority_plugin.initialized
     
     @pytest.mark.asyncio
-    async def test_plugin_cleanup(self, manager: PluginManager, test_plugin: TestPlugin):
+    async def test_plugin_cleanup(self, manager: PluginManager, test_plugin: MockPlugin):
         """Test plugin cleanup."""
         manager.register_plugin(test_plugin)
         await manager.initialize_plugins()
@@ -328,7 +328,7 @@ class TestPluginManager:
         assert test_plugin.cleanup_called
     
     @pytest.mark.asyncio
-    async def test_plugin_hook_integration(self, manager: PluginManager, test_plugin: TestPlugin):
+    async def test_plugin_hook_integration(self, manager: PluginManager, test_plugin: MockPlugin):
         """Test plugin hook integration."""
         # Initialize plugin (which registers hooks)
         manager.register_plugin(test_plugin)

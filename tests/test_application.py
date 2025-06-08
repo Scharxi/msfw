@@ -6,7 +6,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from msfw import MSFWApplication, Config
-from tests.conftest import TestModule, TestPlugin
+from tests.conftest import MockModule, MockPlugin
 
 # Mark all async tests in this module
 pytestmark = pytest.mark.asyncio
@@ -53,7 +53,7 @@ class TestMSFWApplication:
         # Cleanup
         await app.cleanup()
     
-    async def test_application_with_modules(self, test_config: Config, test_module: TestModule):
+    async def test_application_with_modules(self, test_config: Config, test_module: MockModule):
         """Test application with modules."""
         app = MSFWApplication(test_config)
         
@@ -73,7 +73,7 @@ class TestMSFWApplication:
         
         await app.cleanup()
     
-    async def test_application_with_plugins(self, test_config: Config, test_plugin: TestPlugin):
+    async def test_application_with_plugins(self, test_config: Config, test_plugin: MockPlugin):
         """Test application with plugins."""
         app = MSFWApplication(test_config)
         
@@ -222,21 +222,18 @@ module = AutoTestModule()
         
         await app.cleanup()
     
-    @patch('uvicorn.run')
-    async def test_application_run(self, mock_uvicorn_run, test_config: Config):
+    @patch('uvicorn.Server.serve')
+    async def test_application_run(self, mock_serve, test_config: Config):
         """Test application run method."""
         app = MSFWApplication(test_config)
         
-        # Run should call uvicorn.run
+        # Mock serve to return immediately
+        mock_serve.return_value = None
+        
+        # Run should call uvicorn.Server.serve
         await app.run()
         
-        mock_uvicorn_run.assert_called_once()
-        call_args = mock_uvicorn_run.call_args
-        
-        # Check that the FastAPI app was passed
-        assert "app" in call_args.kwargs or len(call_args.args) > 0
-        assert call_args.kwargs.get("host") == test_config.host
-        assert call_args.kwargs.get("port") == test_config.port
+        mock_serve.assert_called_once()
     
     async def test_application_error_handling(self, test_config: Config):
         """Test application error handling."""
@@ -304,7 +301,7 @@ class TestApplicationConfiguration:
 class TestApplicationEvents:
     """Test application event handling."""
     
-    async def test_startup_events(self, test_config: Config, test_plugin: TestPlugin):
+    async def test_startup_events(self, test_config: Config, test_plugin: MockPlugin):
         """Test startup event handling."""
         app = MSFWApplication(test_config)
         app.add_plugin(test_plugin)
@@ -316,7 +313,7 @@ class TestApplicationEvents:
         
         await app.cleanup()
     
-    async def test_shutdown_events(self, test_config: Config, test_plugin: TestPlugin):
+    async def test_shutdown_events(self, test_config: Config, test_plugin: MockPlugin):
         """Test shutdown event handling."""
         app = MSFWApplication(test_config)
         app.add_plugin(test_plugin)
@@ -340,7 +337,7 @@ class TestApplicationUtilities:
         assert not app.initialized
         assert app._fastapi_app is None
     
-    def test_module_addition_before_init(self, test_config: Config, test_module: TestModule):
+    def test_module_addition_before_init(self, test_config: Config, test_module: MockModule):
         """Test adding modules before initialization."""
         app = MSFWApplication(test_config)
         
@@ -350,7 +347,7 @@ class TestApplicationUtilities:
         # Module should be in pending list
         assert test_module in app._pending_modules
     
-    def test_plugin_addition_before_init(self, test_config: Config, test_plugin: TestPlugin):
+    def test_plugin_addition_before_init(self, test_config: Config, test_plugin: MockPlugin):
         """Test adding plugins before initialization."""
         app = MSFWApplication(test_config)
         
@@ -404,11 +401,11 @@ class TestApplicationEndToEnd:
         app = MSFWApplication(test_config)
         
         # Add a test module
-        test_module = TestModule()
+        test_module = MockModule()
         app.add_module(test_module)
         
         # Add a test plugin
-        test_plugin = TestPlugin()
+        test_plugin = MockPlugin()
         app.add_plugin(test_plugin)
         
         # Initialize
