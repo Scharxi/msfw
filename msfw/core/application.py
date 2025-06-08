@@ -124,8 +124,12 @@ class MSFWApplication:
         # Setup module manager
         self.module_manager = ModuleManager(self.config)
         
-        # Setup service SDK
-        self.sdk = ServiceSDK(config=self.config)
+        # Setup service SDK (disabled for tests)
+        import os
+        if not os.environ.get('MSFW_DISABLE_SDK'):
+            self.sdk = ServiceSDK(config=self.config)
+        else:
+            self.sdk = None
         
         # Setup middleware
         self._setup_middleware()

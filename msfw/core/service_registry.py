@@ -300,12 +300,15 @@ class ServiceRegistry:
     
     async def shutdown(self) -> None:
         """Shutdown the service registry."""
-        if self._health_check_task:
+        if self._health_check_task and not self._health_check_task.done():
             self._health_check_task.cancel()
             try:
                 await self._health_check_task
             except asyncio.CancelledError:
                 pass
+            except Exception:
+                pass  # Ignore other exceptions during shutdown
+        self._health_check_task = None
 
 
 # Global service registry instance
