@@ -124,8 +124,12 @@ class ServiceRegistry:
         
         self.logger.info(f"Deregistered service: {service_name}")
     
-    async def discover_service(self, service_name: str) -> List[ServiceInstance]:
-        """Discover healthy instances of a service."""
+    async def discover_service(
+        self, 
+        service_name: str,
+        version: Optional[str] = None
+    ) -> List[ServiceInstance]:
+        """Discover healthy instances of a service, optionally filtered by version."""
         if service_name not in self._services:
             return []
         
@@ -134,15 +138,35 @@ class ServiceRegistry:
             if s.status == ServiceStatus.HEALTHY
         ]
         
+        # Filter by version if specified
+        if version:
+            from msfw.core.versioning import VersionInfo
+            try:
+                requested_version = VersionInfo.from_string(version)
+                version_filtered = []
+                
+                for service in healthy_services:
+                    service_version = VersionInfo.from_string(service.version)
+                    # Include services with compatible versions
+                    if (service_version == requested_version or 
+                        service_version.is_compatible_with(requested_version)):
+                        version_filtered.append(service)
+                
+                return version_filtered
+            except ValueError:
+                # If version parsing fails, return all healthy services
+                pass
+        
         return healthy_services
     
     async def get_service_endpoint(
         self, 
         service_name: str,
+        version: Optional[str] = None,
         load_balancer: str = "round_robin"
     ) -> Optional[ServiceEndpoint]:
-        """Get a service endpoint using specified load balancing."""
-        services = await self.discover_service(service_name)
+        """Get a service endpoint using specified load balancing and version."""
+        services = await self.discover_service(service_name, version=version)
         if not services:
             return None
         
