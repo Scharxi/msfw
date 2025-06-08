@@ -1761,7 +1761,7 @@ await {snake_name}.create()
 Retrieves a {snake_name} by ID.
 
 ```python
-result = await {class_name}.get(id=1)
+result = await {snake_name}.get(id=1)
 ```
 
 **Parameters:**
@@ -2177,125 +2177,794 @@ def format(
     exclude: Optional[str] = typer.Option(None, help="Exclude patterns (comma-separated)"),
     line_length: int = typer.Option(88, help="Maximum line length"),
 ):
-    """Format code using Black and organize imports with isort."""
-    
-    # Build exclude patterns
-    exclude_patterns = []
-    if exclude:
-        exclude_patterns = [pattern.strip() for pattern in exclude.split(",")]
-    
-    default_excludes = ["__pycache__", ".git", ".venv", "build", "dist", "*.egg-info"]
-    exclude_patterns.extend(default_excludes)
-    
-    if check:
-        console.print("[blue]Checking code formatting...[/blue]")
-    else:
-        console.print("[blue]Formatting code...[/blue]")
-    
-    issues_found = False
-    
-    # 1. Run isort for import organization
-    console.print("\n[cyan]1. Organizing imports with isort...[/cyan]")
+    """Format code using black."""
     try:
-        isort_cmd = ["isort", "."]
+        import subprocess
+        import shutil
+        
+        if not shutil.which("black"):
+            console.print("❌ Black is not installed. Install it with: pip install black", style="red")
+            raise typer.Exit(1)
+        
+        # Base command
+        cmd = ["black"]
         
         if check:
-            isort_cmd.extend(["--check-only", "--diff"])
+            cmd.append("--check")
+        
+        if line_length != 88:
+            cmd.extend(["--line-length", str(line_length)])
+        
+        # Add exclude patterns
+        exclude_patterns = []
+        if exclude:
+            exclude_patterns.extend(exclude.split(","))
+        
+        # Always exclude common directories
+        exclude_patterns.extend([
+            "__pycache__",
+            ".venv",
+            "venv",
+            ".git",
+            "build",
+            "dist",
+            "*.egg-info"
+        ])
         
         if exclude_patterns:
-            valid_patterns = [p for p in exclude_patterns if p.strip()]
-            if valid_patterns:
-                isort_cmd.extend(["--skip", ",".join(valid_patterns)])
+            cmd.extend(["--exclude", "|".join(exclude_patterns)])
         
-        result = subprocess.run(isort_cmd, capture_output=True, text=True, encoding='utf-8', errors='replace')
+        # Add current directory
+        cmd.append(".")
+        
+        console.print(f"🎨 Running: {' '.join(cmd)}")
+        
+        result = subprocess.run(cmd, capture_output=True, text=True)
         
         if result.stdout:
             console.print(result.stdout)
         if result.stderr:
-            console.print(f"[yellow]{result.stderr}[/yellow]")
+            console.print(result.stderr, style="red")
         
-        if result.returncode != 0:
-            issues_found = True
+        if result.returncode == 0:
             if check:
-                console.print("[red]✗ isort found import organization issues[/red]")
+                console.print("✅ Code is properly formatted", style="green")
             else:
-                console.print("[red]✗ isort failed to organize imports[/red]")
+                console.print("✅ Code formatting completed", style="green")
         else:
-            console.print("[green]✓ Import organization completed[/green]")
-            
-    except FileNotFoundError:
-        console.print("[yellow]⚠ isort not found. Install with: pip install isort[/yellow]")
-    
-    # 2. Run Black for code formatting
-    console.print("\n[cyan]2. Formatting code with Black...[/cyan]")
-    try:
-        black_cmd = ["black", ".", f"--line-length={line_length}"]
-        
-        if check:
-            black_cmd.extend(["--check", "--diff"])
-        
-        if exclude_patterns:
-            valid_patterns = [p for p in exclude_patterns if p.strip()]
-            if valid_patterns:
-                black_cmd.extend(["--exclude", "|".join(valid_patterns)])
-        
-        result = subprocess.run(black_cmd, capture_output=True, text=True, encoding='utf-8', errors='replace')
-        
-        if result.stdout:
-            console.print(result.stdout)
-        if result.stderr:
-            console.print(f"[yellow]{result.stderr}[/yellow]")
-        
-        if result.returncode != 0:
-            issues_found = True
             if check:
-                console.print("[red]✗ Black found formatting issues[/red]")
+                console.print("❌ Code formatting issues found", style="red")
             else:
-                console.print("[red]✗ Black failed to format code[/red]")
-        else:
-            console.print("[green]✓ Code formatting completed[/green]")
+                console.print("❌ Code formatting failed", style="red")
+            raise typer.Exit(result.returncode)
             
-    except FileNotFoundError:
-        console.print("[yellow]⚠ Black not found. Install with: pip install black[/yellow]")
-    
-    # 3. Run additional formatting tools
-    console.print("\n[cyan]3. Running additional formatting checks...[/cyan]")
-    
-    # Check for trailing whitespace and fix if not in check mode
+    except Exception as e:
+        console.print(f"❌ Formatting failed: {e}", style="red")
+        raise typer.Exit(1)
+
+
+# Environment Management Commands
+env_app = typer.Typer(help="Environment management commands")
+app.add_typer(env_app, name="env")
+
+
+@env_app.command("list")
+def list_environments(
+    config_file: Optional[str] = typer.Option(None, help="Configuration file path"),
+    verbose: bool = typer.Option(False, help="Show detailed environment information"),
+):
+    """List all available environments."""
     try:
-        if not check:
-            # Remove trailing whitespace
-            for py_file in Path(".").rglob("*.py"):
-                if any(exclude in str(py_file) for exclude in exclude_patterns):
-                    continue
-                
-                content = py_file.read_text(encoding="utf-8")
-                lines = content.splitlines()
-                cleaned_lines = [line.rstrip() for line in lines]
-                
-                if lines != cleaned_lines:
-                    py_file.write_text("\n".join(cleaned_lines) + "\n", encoding="utf-8")
-                    console.print(f"[green]✓ Removed trailing whitespace from {py_file}[/green]")
+        from msfw.core.config import load_config
         
-        console.print("[green]✓ Additional formatting checks completed[/green]")
+        # Load configuration
+        if config_file:
+            config = load_config(config_file)
+        else:
+            config = load_config()
+        
+        console.print("🌍 Available Environments", style="bold blue")
+        console.print("=" * 50)
+        
+        if not config.environments:
+            console.print("No environments configured", style="yellow")
+            console.print("\n💡 Define environments in your configuration file:")
+            console.print("""
+[environments.development]
+debug = true
+log_level = "DEBUG"
+
+[environments.production]
+debug = false
+log_level = "WARNING"
+            """)
+            return
+        
+        # Create table for environments
+        table = Table(show_header=True, header_style="bold magenta")
+        table.add_column("Environment", style="cyan")
+        table.add_column("Current", style="green")
+        table.add_column("Debug", style="yellow")
+        table.add_column("Log Level", style="blue")
+        
+        if verbose:
+            table.add_column("Services", style="purple")
+        
+        for env_name, env_config in config.environments.items():
+            current_marker = "✓" if env_name == config.environment else ""
+            services_info = ""
+            
+            if verbose and env_config.services:
+                services_info = ", ".join([
+                    f"{name}({cfg.port})" 
+                    for name, cfg in env_config.services.items() 
+                    if cfg.enabled
+                ])
+            
+            row = [
+                env_name,
+                current_marker,
+                str(env_config.debug),
+                env_config.log_level,
+            ]
+            
+            if verbose:
+                row.append(services_info or "None")
+            
+            table.add_row(*row)
+        
+        console.print(table)
+        
+        console.print(f"\n📍 Current environment: [bold green]{config.environment}[/bold green]")
+        
+        if verbose:
+            current_env = config.get_current_environment_config()
+            if current_env:
+                console.print(f"\n🔍 Current Environment Details:")
+                console.print(f"  Debug: {current_env.debug}")
+                console.print(f"  Log Level: {current_env.log_level}")
+                
+                if current_env.services:
+                    console.print("  Services:")
+                    for service_name, service_config in current_env.services.items():
+                        status = "enabled" if service_config.enabled else "disabled"
+                        console.print(f"    - {service_name}: {status} (port: {service_config.port})")
         
     except Exception as e:
-        console.print(f"[yellow]⚠ Additional formatting checks failed: {e}[/yellow]")
-    
-    # Summary
-    console.print("\n[cyan]Summary:[/cyan]")
-    if issues_found:
-        if check:
-            console.print("[red]✗ Code formatting issues found. Run 'msfw format' to fix them.[/red]")
-            raise typer.Exit(1)
+        console.print(f"❌ Failed to list environments: {e}", style="red")
+        raise typer.Exit(1)
+
+
+@env_app.command("switch")
+def switch_environment(
+    environment: str = typer.Argument(help="Environment name to switch to"),
+    config_file: Optional[str] = typer.Option(None, help="Configuration file path"),
+    validate: bool = typer.Option(True, help="Validate environment configuration"),
+):
+    """Switch to a different environment."""
+    try:
+        from msfw.core.config import load_config
+        import os
+        
+        # Load configuration to validate environment exists
+        if config_file:
+            config = load_config(config_file)
         else:
-            console.print("[red]✗ Some formatting operations failed.[/red]")
+            config = load_config()
+        
+        # Check if environment exists
+        if environment not in config.environments:
+            console.print(f"❌ Environment '{environment}' not found", style="red")
+            console.print("\n🌍 Available environments:")
+            for env_name in config.environments.keys():
+                console.print(f"  - {env_name}")
             raise typer.Exit(1)
-    else:
-        if check:
-            console.print("[green]✓ Code formatting is consistent![/green]")
+        
+        # Validate environment if requested
+        if validate:
+            env_config = config.environments[environment]
+            validation_errors = []
+            
+            # Check for missing required environment variables
+            for service_name, service_config in env_config.services.items():
+                if service_config.enabled:
+                    # Check if port is reasonable
+                    if not (1 <= service_config.port <= 65535):
+                        validation_errors.append(f"Service '{service_name}' has invalid port: {service_config.port}")
+            
+            if validation_errors:
+                console.print(f"❌ Environment '{environment}' validation failed:", style="red")
+                for error in validation_errors:
+                    console.print(f"  - {error}")
+                
+                if not typer.confirm("Continue anyway?"):
+                    raise typer.Exit(1)
+        
+        # Set environment variable
+        os.environ["ENVIRONMENT"] = environment
+        
+        # Update .env file if it exists
+        env_file = Path(".env")
+        if env_file.exists():
+            lines = env_file.read_text().splitlines()
+            updated_lines = []
+            env_found = False
+            
+            for line in lines:
+                if line.startswith("ENVIRONMENT="):
+                    updated_lines.append(f"ENVIRONMENT={environment}")
+                    env_found = True
+                else:
+                    updated_lines.append(line)
+            
+            if not env_found:
+                updated_lines.append(f"ENVIRONMENT={environment}")
+            
+            env_file.write_text("\n".join(updated_lines) + "\n")
+            console.print(f"📝 Updated .env file", style="blue")
         else:
-            console.print("[green]✓ Code formatted successfully![/green]")
+            # Create .env file
+            env_file.write_text(f"ENVIRONMENT={environment}\n")
+            console.print(f"📝 Created .env file", style="blue")
+        
+        console.print(f"✅ Switched to environment: [bold green]{environment}[/bold green]")
+        
+        # Show environment details
+        env_config = config.environments[environment]
+        console.print(f"\n🔍 Environment Details:")
+        console.print(f"  Debug: {env_config.debug}")
+        console.print(f"  Log Level: {env_config.log_level}")
+        
+        if env_config.services:
+            enabled_services = [name for name, cfg in env_config.services.items() if cfg.enabled]
+            if enabled_services:
+                console.print(f"  Enabled Services: {', '.join(enabled_services)}")
+        
+    except Exception as e:
+        console.print(f"❌ Failed to switch environment: {e}", style="red")
+        raise typer.Exit(1)
+
+
+@env_app.command("validate")
+def validate_environment(
+    environment: Optional[str] = typer.Option(None, help="Environment to validate (current if not specified)"),
+    config_file: Optional[str] = typer.Option(None, help="Configuration file path"),
+    strict: bool = typer.Option(False, help="Use strict validation rules"),
+):
+    """Validate environment configuration."""
+    try:
+        from msfw.core.config import load_config
+        import re
+        
+        # Load configuration
+        if config_file:
+            config = load_config(config_file)
+        else:
+            config = load_config()
+        
+        # Determine which environment to validate
+        if environment is None:
+            environment = config.environment
+            console.print(f"🔍 Validating current environment: [bold cyan]{environment}[/bold cyan]")
+        else:
+            console.print(f"🔍 Validating environment: [bold cyan]{environment}[/bold cyan]")
+        
+        # Check if environment exists
+        if environment not in config.environments:
+            console.print(f"❌ Environment '{environment}' not found in configuration", style="red")
+            raise typer.Exit(1)
+        
+        env_config = config.environments[environment]
+        errors = []
+        warnings = []
+        
+        # Validate global environment settings
+        if not env_config.log_level or env_config.log_level not in ["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"]:
+            errors.append("Invalid log level (must be DEBUG, INFO, WARNING, ERROR, or CRITICAL)")
+        
+        # Validate services in this environment
+        for service_name, service_config in env_config.services.items():
+            service_prefix = f"Service '{service_name}'"
+            
+            # Port validation
+            if not (1 <= service_config.port <= 65535):
+                errors.append(f"{service_prefix}: Invalid port {service_config.port} (must be 1-65535)")
+            
+            # Check for port conflicts
+            for other_name, other_config in env_config.services.items():
+                if (other_name != service_name and 
+                    other_config.enabled and service_config.enabled and
+                    other_config.port == service_config.port):
+                    errors.append(f"{service_prefix}: Port conflict with service '{other_name}' (both use port {service_config.port})")
+            
+            # Validate database URL if specified
+            if service_config.database and service_config.database.url:
+                db_url = service_config.database.url
+                if not (db_url.startswith(('sqlite', 'postgresql', 'mysql')) or 
+                       '${' in db_url):  # Allow environment variable interpolation
+                    warnings.append(f"{service_prefix}: Database URL format may be invalid")
+            
+            # Validate Redis URL if specified  
+            if service_config.redis and service_config.redis.url:
+                redis_url = service_config.redis.url
+                if not (redis_url.startswith('redis://') or '${' in redis_url):
+                    warnings.append(f"{service_prefix}: Redis URL should start with 'redis://'")
+            
+            # Strict validation rules
+            if strict:
+                # Production environment checks
+                if environment.lower() in ['production', 'prod']:
+                    if service_config.debug:
+                        warnings.append(f"{service_prefix}: Debug mode enabled in production environment")
+                    
+                    if service_config.workers < 2:
+                        warnings.append(f"{service_prefix}: Consider using multiple workers in production")
+                
+                # Security checks
+                if (service_config.security and 
+                    service_config.security.secret_key and 
+                    service_config.security.secret_key in ['dev-secret-key', 'change-me-in-production']):
+                    errors.append(f"{service_prefix}: Using default secret key (security risk)")
+        
+        # Check for missing required environment variables in production
+        if strict and environment.lower() in ['production', 'prod']:
+            critical_vars = ['SECRET_KEY', 'DATABASE_URL']
+            for var in critical_vars:
+                if var not in os.environ:
+                    warnings.append(f"Environment variable '{var}' not set (may be required for production)")
+        
+        # Report results
+        console.print("=" * 50)
+        
+        if errors:
+            console.print(f"❌ Validation failed with {len(errors)} error(s):", style="red")
+            for error in errors:
+                console.print(f"  • {error}", style="red")
+        
+        if warnings:
+            console.print(f"\n⚠️  {len(warnings)} warning(s):", style="yellow")
+            for warning in warnings:
+                console.print(f"  • {warning}", style="yellow")
+        
+        if not errors and not warnings:
+            console.print("✅ Environment configuration is valid", style="green")
+        elif not errors:
+            console.print("✅ Environment configuration is valid (with warnings)", style="green")
+        
+        console.print("=" * 50)
+        
+        if errors:
+            raise typer.Exit(1)
+            
+    except Exception as e:
+        console.print(f"❌ Failed to validate environment: {e}", style="red")
+        raise typer.Exit(1)
+
+
+# Secrets Management Commands
+secrets_app = typer.Typer(help="Secure secrets management commands")
+app.add_typer(secrets_app, name="secrets")
+
+
+@secrets_app.command("list")
+def list_secrets(
+    environment: Optional[str] = typer.Option(None, help="Environment to list secrets for"),
+    show_values: bool = typer.Option(False, help="Show secret values (use with caution)"),
+    config_file: Optional[str] = typer.Option(None, help="Configuration file path"),
+):
+    """List configured secrets and their sources."""
+    try:
+        from msfw.core.config import load_config
+        import os
+        import re
+        
+        # Load configuration
+        if config_file:
+            config = load_config(config_file)
+        else:
+            config = load_config()
+        
+        target_env = environment or config.environment
+        console.print(f"🔐 Secrets for environment: [bold cyan]{target_env}[/bold cyan]")
+        console.print("=" * 60)
+        
+        # Find all environment variable references in config
+        secrets_info = {}
+        
+        def extract_env_vars(data, path=""):
+            """Recursively extract environment variable references."""
+            if isinstance(data, str):
+                # Find ${VAR_NAME} or ${VAR_NAME:default} patterns
+                pattern = r'\$\{([^}:]+)(?::([^}]*))?\}'
+                matches = re.findall(pattern, data)
+                for var_name, default_value in matches:
+                    full_path = f"{path}.{var_name}" if path else var_name
+                    secrets_info[var_name] = {
+                        'path': path,
+                        'default': default_value,
+                        'value': os.getenv(var_name, default_value),
+                        'is_set': var_name in os.environ,
+                        'is_secret': any(keyword in var_name.lower() 
+                                       for keyword in ['secret', 'key', 'password', 'token', 'auth'])
+                    }
+            elif isinstance(data, dict):
+                for key, value in data.items():
+                    new_path = f"{path}.{key}" if path else key
+                    extract_env_vars(value, new_path)
+            elif isinstance(data, list):
+                for i, item in enumerate(data):
+                    extract_env_vars(item, f"{path}[{i}]")
+        
+        # Extract from global config
+        config_dict = config.model_dump()
+        extract_env_vars(config_dict)
+        
+        # Extract from target environment
+        if target_env in config.environments:
+            env_config_dict = config.environments[target_env].model_dump()
+            extract_env_vars(env_config_dict)
+        
+        if not secrets_info:
+            console.print("No environment variables found in configuration", style="yellow")
+            return
+        
+        # Create table
+        table = Table(show_header=True, header_style="bold magenta")
+        table.add_column("Variable", style="cyan")
+        table.add_column("Type", style="blue")
+        table.add_column("Status", style="green")
+        table.add_column("Default", style="yellow")
+        
+        if show_values:
+            table.add_column("Current Value", style="red")
+        
+        # Sort by secret status and name
+        sorted_secrets = sorted(secrets_info.items(), 
+                              key=lambda x: (not x[1]['is_secret'], x[0]))
+        
+        for var_name, info in sorted_secrets:
+            var_type = "🔐 Secret" if info['is_secret'] else "📝 Config"
+            status = "✅ Set" if info['is_set'] else "❌ Not Set"
+            default = info['default'] if info['default'] else "None"
+            
+            row = [var_name, var_type, status, default]
+            
+            if show_values:
+                if info['is_secret'] and info['is_set']:
+                    # Mask secret values
+                    value = info['value']
+                    if len(value) > 8:
+                        masked_value = value[:2] + "*" * (len(value) - 4) + value[-2:]
+                    else:
+                        masked_value = "*" * len(value)
+                    row.append(masked_value)
+                else:
+                    row.append(info['value'] or "None")
+            
+            table.add_row(*row)
+        
+        console.print(table)
+        
+        # Summary
+        secret_vars = [name for name, info in secrets_info.items() if info['is_secret']]
+        config_vars = [name for name, info in secrets_info.items() if not info['is_secret']]
+        unset_secrets = [name for name, info in secrets_info.items() 
+                        if info['is_secret'] and not info['is_set']]
+        
+        console.print(f"\n📊 Summary:")
+        console.print(f"  Secrets: {len(secret_vars)}")
+        console.print(f"  Config Variables: {len(config_vars)}")
+        console.print(f"  Unset Secrets: {len(unset_secrets)}")
+        
+        if unset_secrets:
+            console.print(f"\n⚠️  Unset secrets may cause runtime errors:", style="yellow")
+            for secret in unset_secrets:
+                console.print(f"    - {secret}", style="yellow")
+        
+    except Exception as e:
+        console.print(f"❌ Failed to list secrets: {e}", style="red")
+        raise typer.Exit(1)
+
+
+@secrets_app.command("set")
+def set_secret(
+    name: str = typer.Argument(help="Secret name"),
+    value: Optional[str] = typer.Option(None, help="Secret value (will prompt if not provided)"),
+    environment: Optional[str] = typer.Option(None, help="Environment to set secret for"),
+    persist: bool = typer.Option(True, help="Persist to .env file"),
+):
+    """Set a secret value."""
+    try:
+        import os
+        from pathlib import Path
+        import getpass
+        
+        # Get secret value
+        if value is None:
+            value = getpass.getpass(f"Enter value for {name}: ")
+        
+        if not value:
+            console.print("❌ Empty value provided", style="red")
+            raise typer.Exit(1)
+        
+        # Set environment variable
+        os.environ[name] = value
+        console.print(f"✅ Set {name} in current session", style="green")
+        
+        # Persist to .env file if requested
+        if persist:
+            env_file = Path(".env")
+            lines = []
+            
+            if env_file.exists():
+                lines = env_file.read_text().splitlines()
+            
+            # Update or add the secret
+            updated = False
+            for i, line in enumerate(lines):
+                if line.startswith(f"{name}="):
+                    lines[i] = f"{name}={value}"
+                    updated = True
+                    break
+            
+            if not updated:
+                lines.append(f"{name}={value}")
+            
+            env_file.write_text("\n".join(lines) + "\n")
+            console.print(f"💾 Persisted {name} to .env file", style="blue")
+            
+            # Add .env to .gitignore if not already there
+            gitignore = Path(".gitignore")
+            if gitignore.exists():
+                gitignore_content = gitignore.read_text()
+                if ".env" not in gitignore_content:
+                    gitignore.write_text(gitignore_content + "\n.env\n")
+                    console.print("📝 Added .env to .gitignore", style="blue")
+            else:
+                gitignore.write_text(".env\n")
+                console.print("📝 Created .gitignore with .env entry", style="blue")
+        
+        console.print(f"🔐 Secret '{name}' has been set successfully", style="green")
+        
+    except KeyboardInterrupt:
+        console.print("\n❌ Operation cancelled", style="red")
+        raise typer.Exit(1)
+    except Exception as e:
+        console.print(f"❌ Failed to set secret: {e}", style="red")
+        raise typer.Exit(1)
+
+
+@secrets_app.command("unset")  
+def unset_secret(
+    name: str = typer.Argument(help="Secret name to unset"),
+    from_env: bool = typer.Option(True, help="Remove from current environment"),
+    from_file: bool = typer.Option(True, help="Remove from .env file"),
+):
+    """Unset a secret value."""
+    try:
+        import os
+        from pathlib import Path
+        
+        removed_locations = []
+        
+        # Remove from current environment
+        if from_env and name in os.environ:
+            del os.environ[name]
+            removed_locations.append("current session")
+        
+        # Remove from .env file
+        if from_file:
+            env_file = Path(".env")
+            if env_file.exists():
+                lines = env_file.read_text().splitlines()
+                original_count = len(lines)
+                lines = [line for line in lines if not line.startswith(f"{name}=")]
+                
+                if len(lines) < original_count:
+                    env_file.write_text("\n".join(lines) + "\n")
+                    removed_locations.append(".env file")
+        
+        if removed_locations:
+            locations_str = " and ".join(removed_locations)
+            console.print(f"✅ Removed '{name}' from {locations_str}", style="green")
+        else:
+            console.print(f"⚠️  Secret '{name}' was not found in any location", style="yellow")
+        
+    except Exception as e:
+        console.print(f"❌ Failed to unset secret: {e}", style="red")
+        raise typer.Exit(1)
+
+
+@secrets_app.command("validate")
+def validate_secrets(
+    environment: Optional[str] = typer.Option(None, help="Environment to validate"),
+    config_file: Optional[str] = typer.Option(None, help="Configuration file path"),
+    strict: bool = typer.Option(False, help="Strict validation (fail on warnings)"),
+):
+    """Validate that all required secrets are configured."""
+    try:
+        from msfw.core.config import load_config
+        import os
+        import re
+        
+        # Load configuration  
+        if config_file:
+            config = load_config(config_file)
+        else:
+            config = load_config()
+        
+        # Determine which environment to validate
+        if environment is None:
+            environment = config.environment
+            console.print(f"🔍 Validating current environment: [bold cyan]{environment}[/bold cyan]")
+        else:
+            console.print(f"🔍 Validating environment: [bold cyan]{environment}[/bold cyan]")
+        
+        # Check if environment exists
+        if environment not in config.environments:
+            console.print(f"❌ Environment '{environment}' not found in configuration", style="red")
+            raise typer.Exit(1)
+        
+        env_config = config.environments[environment]
+        errors = []
+        warnings = []
+        
+        # Validate global environment settings
+        if not env_config.log_level or env_config.log_level not in ["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"]:
+            errors.append("Invalid log level (must be DEBUG, INFO, WARNING, ERROR, or CRITICAL)")
+        
+        # Validate services in this environment
+        for service_name, service_config in env_config.services.items():
+            service_prefix = f"Service '{service_name}'"
+            
+            # Port validation
+            if not (1 <= service_config.port <= 65535):
+                errors.append(f"{service_prefix}: Invalid port {service_config.port} (must be 1-65535)")
+            
+            # Check for port conflicts
+            for other_name, other_config in env_config.services.items():
+                if (other_name != service_name and 
+                    other_config.enabled and service_config.enabled and
+                    other_config.port == service_config.port):
+                    errors.append(f"{service_prefix}: Port conflict with service '{other_name}' (both use port {service_config.port})")
+            
+            # Validate database URL if specified
+            if service_config.database and service_config.database.url:
+                db_url = service_config.database.url
+                if not (db_url.startswith(('sqlite', 'postgresql', 'mysql')) or 
+                       '${' in db_url):  # Allow environment variable interpolation
+                    warnings.append(f"{service_prefix}: Database URL format may be invalid")
+            
+            # Validate Redis URL if specified  
+            if service_config.redis and service_config.redis.url:
+                redis_url = service_config.redis.url
+                if not (redis_url.startswith('redis://') or '${' in redis_url):
+                    warnings.append(f"{service_prefix}: Redis URL should start with 'redis://'")
+            
+            # Strict validation rules
+            if strict:
+                # Production environment checks
+                if environment.lower() in ['production', 'prod']:
+                    if service_config.debug:
+                        warnings.append(f"{service_prefix}: Debug mode enabled in production environment")
+                    
+                    if service_config.workers < 2:
+                        warnings.append(f"{service_prefix}: Consider using multiple workers in production")
+                
+                # Security checks
+                if (service_config.security and 
+                    service_config.security.secret_key and 
+                    service_config.security.secret_key in ['dev-secret-key', 'change-me-in-production']):
+                    errors.append(f"{service_prefix}: Using default secret key (security risk)")
+        
+        # Check for missing required environment variables in production
+        if strict and environment.lower() in ['production', 'prod']:
+            critical_vars = ['SECRET_KEY', 'DATABASE_URL']
+            for var in critical_vars:
+                if var not in os.environ:
+                    warnings.append(f"Environment variable '{var}' not set (may be required for production)")
+        
+        # Report results
+        console.print("=" * 50)
+        
+        if errors:
+            console.print(f"❌ Validation failed with {len(errors)} error(s):", style="red")
+            for error in errors:
+                console.print(f"  • {error}", style="red")
+        
+        if warnings:
+            console.print(f"\n⚠️  {len(warnings)} warning(s):", style="yellow")
+            for warning in warnings:
+                console.print(f"  • {warning}", style="yellow")
+        
+        if not errors and not warnings:
+            console.print("✅ Environment configuration is valid", style="green")
+        elif not errors:
+            console.print("✅ Environment configuration is valid (with warnings)", style="green")
+        
+        console.print("=" * 50)
+        
+        if errors:
+            raise typer.Exit(1)
+            
+    except Exception as e:
+        console.print(f"❌ Failed to validate environment: {e}", style="red")
+        raise typer.Exit(1)
+
+
+@secrets_app.command("generate")
+def generate_secret(
+    name: Optional[str] = typer.Argument(None, help="Secret name"),
+    length: int = typer.Option(32, help="Secret length"),
+    charset: str = typer.Option("alphanumeric", help="Character set: alphanumeric, hex, base64, or custom"),
+    custom_chars: Optional[str] = typer.Option(None, help="Custom character set"),
+    set_env: bool = typer.Option(False, help="Set as environment variable"),
+):
+    """Generate a secure random secret."""
+    try:
+        import secrets
+        import string
+        
+        # Define character sets
+        charsets = {
+            'alphanumeric': string.ascii_letters + string.digits,
+            'hex': string.hexdigits.lower(),
+            'base64': string.ascii_letters + string.digits + '+/',
+            'ascii': string.ascii_letters + string.digits + string.punctuation,
+        }
+        
+        if charset == 'custom' and custom_chars:
+            chars = custom_chars
+        elif charset in charsets:
+            chars = charsets[charset]
+        else:
+            console.print(f"❌ Unknown charset: {charset}", style="red")
+            console.print(f"Available charsets: {', '.join(charsets.keys())}, custom")
+            raise typer.Exit(1)
+        
+        # Generate secret
+        if charset == 'hex' and length % 2 == 1:
+            length += 1  # Ensure even length for hex
+        
+        secret_value = ''.join(secrets.choice(chars) for _ in range(length))
+        
+        if name:
+            console.print(f"🔐 Generated secret for '{name}':", style="green")
+            console.print(f"   {name}={secret_value}")
+            
+            if set_env:
+                os.environ[name] = secret_value
+                console.print(f"✅ Set {name} in current session", style="green")
+                
+                # Optionally save to .env
+                if typer.confirm("Save to .env file?"):
+                    from pathlib import Path
+                    env_file = Path(".env")
+                    lines = []
+                    
+                    if env_file.exists():
+                        lines = env_file.read_text().splitlines()
+                    
+                    # Update or add
+                    updated = False
+                    for i, line in enumerate(lines):
+                        if line.startswith(f"{name}="):
+                            lines[i] = f"{name}={secret_value}"
+                            updated = True
+                            break
+                    
+                    if not updated:
+                        lines.append(f"{name}={secret_value}")
+                    
+                    env_file.write_text("\n".join(lines) + "\n")
+                    console.print(f"💾 Saved to .env file", style="blue")
+        else:
+            console.print(f"🔐 Generated secret:", style="green")
+            console.print(f"   {secret_value}")
+        
+    except Exception as e:
+        console.print(f"❌ Failed to generate secret: {e}", style="red")
+        raise typer.Exit(1)
 
 
 if __name__ == "__main__":
