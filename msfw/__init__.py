@@ -17,7 +17,7 @@ Features:
 """
 
 from msfw.core.application import MSFWApplication
-from msfw.core.config import Config, load_config
+from msfw.core.config import Config, load_config, OpenAPIConfig
 from msfw.core.database import Database
 from msfw.core.plugin import Plugin, PluginManager
 from msfw.core.module import Module, ModuleManager
@@ -46,17 +46,23 @@ from msfw.core.types import (
     HTTPMethod, ServiceCallResult, ServiceCallConfig,
     TypedServiceError, ServiceValidationError, ServiceMethodDefinition
 )
+from msfw.core.openapi import OpenAPIManager, setup_openapi_documentation, create_openapi_manager
 
 __version__ = "0.1.0"
 __all__ = [
     "MSFWApplication",
     "Config", 
     "load_config",
+    "OpenAPIConfig",
     "Database",
     "Plugin",
     "PluginManager",
     "Module",
     "ModuleManager",
+    # OpenAPI Documentation
+    "OpenAPIManager",
+    "setup_openapi_documentation",
+    "create_openapi_manager",
     "route",
     "get",
     "post", 

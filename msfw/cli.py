@@ -755,5 +755,137 @@ def dev():
     )
 
 
+@app.command()
+def export_openapi(
+    format: str = typer.Option("json", help="Export format (json, yaml, both)"),
+    output_dir: str = typer.Option("./openapi", help="Output directory"),
+    version: Optional[str] = typer.Option(None, help="Specific API version to export"),
+    config_file: Optional[str] = typer.Option(None, help="Configuration file path"),
+):
+    """Export OpenAPI schema in specified format(s)."""
+    import asyncio
+    from msfw import MSFWApplication, load_config, OpenAPIManager
+    
+    async def export_schema():
+        try:
+            # Load configuration
+            if config_file:
+                config = load_config(config_file)
+            else:
+                config = load_config()
+            
+            # Create and initialize application
+            app = MSFWApplication(config)
+            await app.initialize()
+            
+            # Get the OpenAPI manager
+            openapi_manager = app.openapi_manager
+            if not openapi_manager:
+                console.print("❌ OpenAPI manager not available", style="red")
+                return
+            
+            # Determine formats to export
+            formats = []
+            if format.lower() == "both":
+                formats = ["json", "yaml"]
+            elif format.lower() in ["json", "yaml"]:
+                formats = [format.lower()]
+            else:
+                console.print(f"❌ Unsupported format: {format}. Use 'json', 'yaml', or 'both'", style="red")
+                return
+            
+            # Export schema
+            console.print(f"📄 Exporting OpenAPI schema...", style="blue")
+            if version:
+                console.print(f"   Version: {version}", style="dim")
+            console.print(f"   Format(s): {', '.join(formats)}", style="dim")
+            console.print(f"   Output: {output_dir}", style="dim")
+            
+            exported_files = openapi_manager.export_schema(
+                app.app,
+                formats=formats,
+                output_dir=output_dir,
+                version=version
+            )
+            
+            console.print("✅ Successfully exported OpenAPI schema:", style="green")
+            for format_type, file_path in exported_files.items():
+                console.print(f"   {format_type.upper()}: {file_path}", style="dim")
+                
+        except Exception as e:
+            console.print(f"❌ Failed to export OpenAPI schema: {e}", style="red")
+            raise typer.Exit(1)
+    
+    asyncio.run(export_schema())
+
+
+@app.command()
+def list_versions():
+    """List all available API versions in the current application."""
+    import asyncio
+    from msfw import MSFWApplication, load_config
+    
+    async def show_versions():
+        try:
+            # Load configuration
+            config = load_config()
+            
+            # Create and initialize application
+            app = MSFWApplication(config)
+            await app.initialize()
+            
+            # Get version manager
+            from msfw.core.versioning import version_manager
+            
+            available_versions = version_manager.get_available_versions()
+            if not available_versions:
+                console.print("ℹ️ No API versions configured", style="yellow")
+                return
+            
+            # Create table
+            table = Table(title="API Versions")
+            table.add_column("Version", style="cyan", no_wrap=True)
+            table.add_column("Status", style="green")
+            table.add_column("Deprecation Message", style="yellow")
+            table.add_column("Sunset Date", style="red")
+            
+            for version_str in available_versions:
+                try:
+                    from msfw.core.versioning import VersionInfo
+                    version_info = VersionInfo.from_string(version_str)
+                    
+                    status = "Deprecated" if version_manager.is_version_deprecated(version_info) else "Active"
+                    
+                    deprecation_info = version_manager.get_deprecation_info(version_info)
+                    deprecation_msg = deprecation_info.get("message", "-") if deprecation_info else "-"
+                    sunset_date = deprecation_info.get("sunset_date", "-") if deprecation_info else "-"
+                    
+                    table.add_row(
+                        version_str,
+                        status,
+                        deprecation_msg,
+                        sunset_date
+                    )
+                except Exception as e:
+                    # Fallback for any parsing issues
+                    table.add_row(version_str, "Active", "-", "-")
+            
+            console.print(table)
+            
+            # Show endpoints
+            if config.openapi.enabled:
+                console.print("\n📄 Documentation endpoints:")
+                console.print(f"   Swagger UI: http://{config.host}:{config.port}{config.openapi.docs_url}")
+                console.print(f"   ReDoc: http://{config.host}:{config.port}{config.openapi.redoc_url}")
+                console.print(f"   OpenAPI Schema: http://{config.host}:{config.port}{config.openapi.openapi_url}")
+                console.print(f"   Version List: http://{config.host}:{config.port}/api/versions")
+                
+        except Exception as e:
+            console.print(f"❌ Failed to list versions: {e}", style="red")
+            raise typer.Exit(1)
+    
+    asyncio.run(show_versions())
+
+
 if __name__ == "__main__":
     app() 

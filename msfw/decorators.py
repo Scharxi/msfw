@@ -27,17 +27,49 @@ def route(
     dependencies: Optional[List[Depends]] = None,
     **kwargs
 ):
-    """Decorator to register a route with optional versioning."""
+    """Decorator to register a route with optional versioning and enhanced OpenAPI support."""
     methods = methods or ["GET"]
     
     def decorator(func: Callable) -> Callable:
+        # Enhance tags with version information for OpenAPI
+        enhanced_tags = tags.copy() if tags else []
+        
+        # Add version tag if version is specified
+        if version:
+            version_tag = f"v{version}"
+            if version_tag not in enhanced_tags:
+                enhanced_tags.append(version_tag)
+        
+        # Add deprecation tag if deprecated
+        if deprecated and "deprecated" not in enhanced_tags:
+            enhanced_tags.append("deprecated")
+        
+        # Auto-generate summary if not provided
+        if not summary:
+            func_name = func.__name__.replace("_", " ").title()
+            method_str = "/".join(methods).upper()
+            summary = f"{method_str} {func_name}"
+            if version:
+                summary += f" (v{version})"
+        
+        # Enhance description with version info
+        enhanced_description = description
+        if version and not enhanced_description:
+            enhanced_description = f"API endpoint for version {version}"
+        elif version and enhanced_description:
+            enhanced_description = f"{enhanced_description}\n\n**API Version:** {version}"
+            
+        if deprecated:
+            deprecation_note = "\n\n⚠️ **This endpoint is deprecated and may be removed in future versions.**"
+            enhanced_description = (enhanced_description or "") + deprecation_note
+        
         route_info = {
             "path": path,
             "methods": methods,
             "func": func,
-            "tags": tags,
+            "tags": enhanced_tags,
             "summary": summary,
-            "description": description,
+            "description": enhanced_description,
             "response_model": response_model,
             "status_code": status_code,
             "dependencies": dependencies,
@@ -57,9 +89,9 @@ def route(
                 methods=methods,
                 version=version,
                 deprecated=deprecated,
-                tags=tags,
+                tags=enhanced_tags,
                 summary=summary,
-                description=description,
+                description=enhanced_description,
                 response_model=response_model,
                 status_code=status_code,
                 dependencies=dependencies,
@@ -194,8 +226,8 @@ class RouteRegistry:
         _route_registry.clear()
     
     @staticmethod
-    def register_routes(router: APIRouter):
-        """Register all routes with a router."""
+    def register_routes(app_or_router):
+        """Register all routes with a router or FastAPI app."""
         for route_info in _route_registry:
             methods = route_info["methods"]
             path = route_info["path"]
@@ -216,19 +248,19 @@ class RouteRegistry:
             
             for method in methods:
                 if method.upper() == "GET":
-                    router.get(path, **route_kwargs)(func)
+                    app_or_router.get(path, **route_kwargs)(func)
                 elif method.upper() == "POST":
-                    router.post(path, **route_kwargs)(func)
+                    app_or_router.post(path, **route_kwargs)(func)
                 elif method.upper() == "PUT":
-                    router.put(path, **route_kwargs)(func)
+                    app_or_router.put(path, **route_kwargs)(func)
                 elif method.upper() == "DELETE":
-                    router.delete(path, **route_kwargs)(func)
+                    app_or_router.delete(path, **route_kwargs)(func)
                 elif method.upper() == "PATCH":
-                    router.patch(path, **route_kwargs)(func)
+                    app_or_router.patch(path, **route_kwargs)(func)
                 elif method.upper() == "HEAD":
-                    router.head(path, **route_kwargs)(func)
+                    app_or_router.head(path, **route_kwargs)(func)
                 elif method.upper() == "OPTIONS":
-                    router.options(path, **route_kwargs)(func)
+                    app_or_router.options(path, **route_kwargs)(func)
 
 
 class MiddlewareRegistry:
