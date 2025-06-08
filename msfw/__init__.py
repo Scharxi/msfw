@@ -22,9 +22,22 @@ from msfw.core.database import Database
 from msfw.core.plugin import Plugin, PluginManager
 from msfw.core.module import Module, ModuleManager
 from msfw.decorators import (
-    route, middleware, event_handler,
+    route, get, post, put, delete, patch, middleware, event_handler,
     service_call, retry_on_failure, circuit_breaker, 
     health_check, cached_service_call, service_interface
+)
+from msfw.decorators.versioning import (
+    api_version, version_compatibility, version_since, version_until,
+    version_evolution, VersionedRouter, create_v1_router, create_v2_router, 
+    create_versioned_router
+)
+from msfw.core.versioning import (
+    APIVersionManager, VersionInfo, VersioningStrategy, VersionedAPIRouter,
+    version_manager
+)
+from msfw.middleware.versioning import (
+    APIVersioningMiddleware, ContentNegotiationMiddleware, VersionRoutingMiddleware,
+    create_versioning_middleware
 )
 from msfw.sdk import ServiceSDK, ServiceClient, call_service, register_service, get_service_client
 from msfw.core.service_registry import ServiceRegistry, ServiceInstance, ServiceEndpoint
@@ -45,6 +58,11 @@ __all__ = [
     "Module",
     "ModuleManager",
     "route",
+    "get",
+    "post", 
+    "put",
+    "delete",
+    "patch",
     "middleware", 
     "event_handler",
     # Service Communication SDK
@@ -69,6 +87,26 @@ __all__ = [
     "health_check", 
     "cached_service_call",
     "service_interface",
+    # API Versioning
+    "APIVersionManager",
+    "VersionInfo",
+    "VersioningStrategy",
+    "VersionedAPIRouter",
+    "version_manager",
+    "api_version",
+    "version_compatibility",
+    "version_since",
+    "version_until", 
+    "version_evolution",
+    "VersionedRouter",
+    "create_v1_router",
+    "create_v2_router",
+    "create_versioned_router",
+    # Versioning Middleware
+    "APIVersioningMiddleware",
+    "ContentNegotiationMiddleware", 
+    "VersionRoutingMiddleware",
+    "create_versioning_middleware",
     # Convenience functions
     "call_service",
     "register_service",

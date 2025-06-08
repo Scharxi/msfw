@@ -101,13 +101,21 @@ class ServiceSDK:
         self.logger.info(f"Registered external service: {service_name} at {host}:{port}")
     
     # Service Discovery API
-    async def discover_services(self, service_name: str) -> List[ServiceInstance]:
-        """Discover all healthy instances of a service."""
-        return await self.registry.discover_service(service_name)
+    async def discover_services(
+        self, 
+        service_name: str,
+        version: Optional[str] = None
+    ) -> List[ServiceInstance]:
+        """Discover all healthy instances of a service, optionally filtered by version."""
+        return await self.registry.discover_service(service_name, version=version)
     
-    async def get_service_endpoint(self, service_name: str) -> Optional[str]:
-        """Get a service endpoint URL."""
-        endpoint = await self.registry.get_service_endpoint(service_name)
+    async def get_service_endpoint(
+        self, 
+        service_name: str,
+        version: Optional[str] = None
+    ) -> Optional[str]:
+        """Get a service endpoint URL for a specific version."""
+        endpoint = await self.registry.get_service_endpoint(service_name, version=version)
         return endpoint.url if endpoint else None
     
     async def list_all_services(self) -> Dict[str, List[ServiceInstance]]:
@@ -156,10 +164,21 @@ class ServiceSDK:
         data: Optional[Dict[str, Any]] = None,
         response_model: Optional[Type[BaseModel]] = None,
         timeout: float = 30.0,
+        version: Optional[str] = None,
         **kwargs
     ) -> Any:
-        """Make a simple service call."""
+        """Make a simple service call with optional version specification."""
+        # Add version to service discovery if specified
+        if version:
+            kwargs['version'] = version
+        
         async with self.service_client(service_name, timeout=timeout, **kwargs) as client:
+            # Add version header if specified and not using URL-based versioning
+            headers = kwargs.get('headers', {})
+            if version and not path.startswith('/api/v'):
+                headers['X-API-Version'] = version
+                kwargs['headers'] = headers
+            
             if method.upper() == "GET":
                 return await client.get(path, response_model=response_model)
             elif method.upper() == "POST":
