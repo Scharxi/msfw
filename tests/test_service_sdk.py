@@ -127,7 +127,7 @@ class TestServiceSDK:
         
         assert len(services) == 1
         assert services[0] == mock_instance
-        mock_registry.discover_service.assert_called_once_with("test-service")
+        mock_registry.discover_service.assert_called_once_with("test-service", version=None)
     
     async def test_get_service_endpoint(self, service_sdk, mock_registry):
         """Test getting service endpoint."""
@@ -138,7 +138,7 @@ class TestServiceSDK:
         endpoint_url = await service_sdk.get_service_endpoint("test-service")
         
         assert endpoint_url == "http://localhost:8001"
-        mock_registry.get_service_endpoint.assert_called_once_with("test-service")
+        mock_registry.get_service_endpoint.assert_called_once_with("test-service", version=None)
     
     async def test_get_client(self, service_sdk, mock_client_factory, mock_client):
         """Test getting service client."""
