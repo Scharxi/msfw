@@ -17,6 +17,8 @@ def route(
     path: str,
     methods: Optional[List[str]] = None,
     *,
+    version: Optional[str] = None,
+    deprecated: bool = False,
     tags: Optional[List[str]] = None,
     summary: Optional[str] = None,
     description: Optional[str] = None,
@@ -25,11 +27,11 @@ def route(
     dependencies: Optional[List[Depends]] = None,
     **kwargs
 ):
-    """Decorator to register a route."""
+    """Decorator to register a route with optional versioning."""
     methods = methods or ["GET"]
     
     def decorator(func: Callable) -> Callable:
-        _route_registry.append({
+        route_info = {
             "path": path,
             "methods": methods,
             "func": func,
@@ -39,36 +41,59 @@ def route(
             "response_model": response_model,
             "status_code": status_code,
             "dependencies": dependencies,
+            "version": version,
+            "deprecated": deprecated,
             "kwargs": kwargs,
-        })
+        }
+        
+        _route_registry.append(route_info)
+        
+        # If version is specified, also register with version manager
+        if version:
+            from msfw.core.versioning import version_manager
+            version_manager.register_versioned_route(
+                path=path,
+                func=func,
+                methods=methods,
+                version=version,
+                deprecated=deprecated,
+                tags=tags,
+                summary=summary,
+                description=description,
+                response_model=response_model,
+                status_code=status_code,
+                dependencies=dependencies,
+                **kwargs
+            )
+        
         return func
     
     return decorator
 
 
-def get(path: str, **kwargs):
-    """Decorator for GET routes."""
-    return route(path, methods=["GET"], **kwargs)
+def get(path: str, *, version: Optional[str] = None, **kwargs):
+    """Decorator for GET routes with optional versioning."""
+    return route(path, methods=["GET"], version=version, **kwargs)
 
 
-def post(path: str, **kwargs):
-    """Decorator for POST routes."""
-    return route(path, methods=["POST"], **kwargs)
+def post(path: str, *, version: Optional[str] = None, **kwargs):
+    """Decorator for POST routes with optional versioning."""
+    return route(path, methods=["POST"], version=version, **kwargs)
 
 
-def put(path: str, **kwargs):
-    """Decorator for PUT routes."""
-    return route(path, methods=["PUT"], **kwargs)
+def put(path: str, *, version: Optional[str] = None, **kwargs):
+    """Decorator for PUT routes with optional versioning."""
+    return route(path, methods=["PUT"], version=version, **kwargs)
 
 
-def delete(path: str, **kwargs):
-    """Decorator for DELETE routes."""
-    return route(path, methods=["DELETE"], **kwargs)
+def delete(path: str, *, version: Optional[str] = None, **kwargs):
+    """Decorator for DELETE routes with optional versioning."""
+    return route(path, methods=["DELETE"], version=version, **kwargs)
 
 
-def patch(path: str, **kwargs):
-    """Decorator for PATCH routes."""
-    return route(path, methods=["PATCH"], **kwargs)
+def patch(path: str, *, version: Optional[str] = None, **kwargs):
+    """Decorator for PATCH routes with optional versioning."""
+    return route(path, methods=["PATCH"], version=version, **kwargs)
 
 
 def middleware(
