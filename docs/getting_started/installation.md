@@ -1,225 +1,225 @@
 # Installation
 
-Dieses Kapitel führt Sie durch die verschiedenen Installationsmöglichkeiten von MSFW.
+This chapter guides you through the various installation options for MSFW.
 
-## Systemanforderungen
+## System Requirements
 
-- **Python**: 3.13 oder höher
-- **Betriebssystem**: Windows, macOS, Linux
-- **RAM**: Mindestens 512 MB (empfohlen: 2 GB oder mehr)
-- **Festplatte**: Mindestens 100 MB freier Speicherplatz
+- **Python**: 3.13 or higher
+- **Operating System**: Windows, macOS, Linux
+- **RAM**: At least 512 MB (recommended: 2 GB or more)
+- **Disk Space**: At least 100 MB free space
 
-## Abhängigkeiten
+## Dependencies
 
-MSFW basiert auf folgenden Kernbibliotheken:
+MSFW is built on the following core libraries:
 
-- **FastAPI** 0.104+ - Moderne, schnelle Web-Framework
-- **Pydantic** 2.5+ - Datenvalidierung mit Python-Typen
-- **SQLAlchemy** 2.0+ - SQL-Toolkit und ORM
-- **Uvicorn** - ASGI-Server für Produktionsumgebungen
+- **FastAPI** 0.104+ - Modern, fast web framework
+- **Pydantic** 2.5+ - Data validation using Python types
+- **SQLAlchemy** 2.0+ - SQL toolkit and ORM
+- **Uvicorn** - ASGI server for production environments
 
-## Installation über pip
+## Installation via pip
 
-### Grundinstallation
+### Basic installation
 
 ```bash
 pip install msfw
 ```
 
-### Mit entwicklungsabhängigkeiten
+### With development dependencies
 
 ```bash
 pip install msfw[dev]
 ```
 
-### Mit allen optionalen Abhängigkeiten
+### With all optional dependencies
 
 ```bash
 pip install msfw[all]
 ```
 
-## Installation über uv (empfohlen)
+## Installation via uv (recommended)
 
-[uv](https://github.com/astral-sh/uv) ist ein ultraschneller Python-Paketmanager:
+[uv](https://github.com/astral-sh/uv) is an ultra-fast Python package manager:
 
 ```bash
-# uv installieren (falls nicht vorhanden)
+# Install uv (if not already installed)
 curl -LsSf https://astral.sh/uv/install.sh | sh
 
-# MSFW installieren
+# Install MSFW
 uv add msfw
 
-# Mit Entwicklungsabhängigkeiten
+# With development dependencies
 uv add --group dev msfw
 ```
 
-## Installation für Entwicklung
+## Development Installation
 
-### Repository klonen
+### Clone repository
 
 ```bash
 git clone https://github.com/yourusername/msfw.git
 cd msfw
 ```
 
-### Mit uv (empfohlen)
+### With uv (recommended)
 
 ```bash
-# Entwicklungsumgebung einrichten
+# Set up development environment
 uv sync
 
-# Virtuelle Umgebung aktivieren
+# Activate virtual environment
 source .venv/bin/activate  # Linux/macOS
-# oder
+# or
 .venv\Scripts\activate     # Windows
 ```
 
-### Mit pip und virtualenv
+### With pip and virtualenv
 
 ```bash
-# Virtuelle Umgebung erstellen
+# Create virtual environment
 python -m venv .venv
 source .venv/bin/activate  # Linux/macOS
-# oder
+# or
 .venv\Scripts\activate     # Windows
 
-# Abhängigkeiten installieren
+# Install dependencies
 pip install -e ".[dev]"
 ```
 
-## Docker-Installation
+## Docker Installation
 
-### Offizielles Docker-Image
+### Official Docker Image
 
 ```bash
-# MSFW-Container starten
+# Start MSFW container
 docker run -p 8000:8000 msfw/msfw:latest
 ```
 
-### Eigenes Docker-Image erstellen
+### Build your own Docker image
 
 ```dockerfile
 FROM python:3.13-slim
 
 WORKDIR /app
 
-# System-Abhängigkeiten
+# System dependencies
 RUN apt-get update && apt-get install -y \
     build-essential \
     && rm -rf /var/lib/apt/lists/*
 
-# Python-Abhängigkeiten
+# Python dependencies
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Anwendung kopieren
+# Copy application
 COPY . .
 
-# Port freigeben
+# Expose port
 EXPOSE 8000
 
-# Anwendung starten
+# Start application
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
 ```
 
 ```bash
-# Image erstellen
-docker build -t mein-msfw-app .
+# Build image
+docker build -t my-msfw-app .
 
-# Container starten
-docker run -p 8000:8000 mein-msfw-app
+# Start container
+docker run -p 8000:8000 my-msfw-app
 ```
 
-## Virtueller Environment Setup
+## Virtual Environment Setup
 
-### Warum virtuelle Umgebungen?
+### Why virtual environments?
 
-Virtuelle Umgebungen isolieren Projektabhängigkeiten und verhindern Konflikte:
+Virtual environments isolate project dependencies and prevent conflicts:
 
-- **Isolation**: Jedes Projekt hat seine eigenen Abhängigkeiten
-- **Reproduzierbarkeit**: Konsistente Umgebungen über verschiedene Systeme
-- **Sicherheit**: Verhindert versehentliche Systemänderungen
+- **Isolation**: Each project has its own dependencies
+- **Reproducibility**: Consistent environments across different systems
+- **Security**: Prevents accidental system modifications
 
-### Mit venv (Standard)
+### With venv (standard)
 
 ```bash
-# Virtuelle Umgebung erstellen
+# Create virtual environment
 python -m venv msfw-env
 
-# Aktivieren
+# Activate
 source msfw-env/bin/activate  # Linux/macOS
 msfw-env\Scripts\activate     # Windows
 
-# MSFW installieren
+# Install MSFW
 pip install msfw
 
-# Deaktivieren
+# Deactivate
 deactivate
 ```
 
-### Mit conda
+### With conda
 
 ```bash
-# Umgebung erstellen
+# Create environment
 conda create -n msfw python=3.13
 
-# Aktivieren
+# Activate
 conda activate msfw
 
-# MSFW installieren
+# Install MSFW
 pip install msfw
 
-# Deaktivieren
+# Deactivate
 conda deactivate
 ```
 
-## Installation verifizieren
+## Verify Installation
 
-### Grundlegende Überprüfung
+### Basic verification
 
 ```bash
-# MSFW-Version anzeigen
+# Show MSFW version
 python -c "import msfw; print(msfw.__version__)"
 
-# CLI-Tool testen
+# Test CLI tool
 msfw --help
 ```
 
-### Vollständiger Test
+### Complete test
 
 ```python
 from msfw import MSFWApplication, Config
 
-# Einfache Anwendung erstellen
+# Create simple application
 config = Config()
 config.app_name = "Test App"
 
 app = MSFWApplication(config)
 
-print("✅ MSFW erfolgreich installiert!")
+print("✅ MSFW successfully installed!")
 ```
 
-## Häufige Installationsprobleme
+## Common Installation Issues
 
-### Problem: `ModuleNotFoundError`
+### Issue: `ModuleNotFoundError`
 
-**Lösung**: Virtuelle Umgebung aktivieren oder MSFW neu installieren:
+**Solution**: Activate virtual environment or reinstall MSFW:
 
 ```bash
 pip install --force-reinstall msfw
 ```
 
-### Problem: Berechtigungsfehler auf Windows
+### Issue: Permission errors on Windows
 
-**Lösung**: PowerShell als Administrator ausführen oder `--user` Flag verwenden:
+**Solution**: Run PowerShell as administrator or use `--user` flag:
 
 ```bash
 pip install --user msfw
 ```
 
-### Problem: Kompilierungsfehler bei C-Abhängigkeiten
+### Issue: Compilation errors for C dependencies
 
-**Lösung**: Build-Tools installieren:
+**Solution**: Install build tools:
 
 ```bash
 # Windows
@@ -232,18 +232,18 @@ sudo apt-get install build-essential python3-dev
 xcode-select --install
 ```
 
-### Problem: SSL-Zertifikatsfehler
+### Issue: SSL certificate errors
 
-**Lösung**: Vertrauenswürdige Hosts konfigurieren:
+**Solution**: Configure trusted hosts:
 
 ```bash
 pip install --trusted-host pypi.org --trusted-host pypi.python.org msfw
 ```
 
-## Nächste Schritte
+## Next Steps
 
-Nach der erfolgreichen Installation können Sie mit dem [Quick Start](quick_start.md) beginnen oder die [Grundkonzepte](basic_concepts.md) kennenlernen.
+After successful installation, you can start with the [Quick Start](quick_start.md) or learn about the [Basic Concepts](basic_concepts.md).
 
 ```{tip}
-Für Produktionsumgebungen empfehlen wir die Verwendung von Docker oder einem professionellen Deployment-Tool wie Kubernetes.
+For production environments, we recommend using Docker or a professional deployment tool like Kubernetes.
 ``` 

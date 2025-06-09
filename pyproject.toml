@@ -53,6 +53,14 @@ test = [
     "httpx>=0.25.0",
     "coverage>=7.3.0",
 ]
+docs = [
+    "sphinx>=8.2.3",
+    "furo>=2024.1.29",
+    "sphinx-autodoc-typehints>=3.2.0",
+    "sphinx-copybutton>=0.5.2",
+    "sphinx-intl>=2.3.1",
+    "myst-parser>=4.0.1",
+]
 
 [project.scripts]
 msfw = "msfw.cli:app"

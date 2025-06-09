@@ -1,10 +1,10 @@
-# Grundkonzepte
+# Basic Concepts
 
-Verstehen Sie die fundamentalen Konzepte von MSFW und wie sie zusammenarbeiten, um eine leistungsstarke Microservice-Architektur zu schaffen.
+Understand the fundamental concepts of MSFW and how they work together to create a powerful microservice architecture.
 
-## 🏗️ Architektur-Überblick
+## 🏗️ Architecture Overview
 
-MSFW folgt einer modularen, plugin-basierten Architektur, die maximale Flexibilität und Erweiterbarkeit bietet.
+MSFW follows a modular, plugin-based architecture that provides maximum flexibility and extensibility.
 
 ```{mermaid}
 graph TB
@@ -29,16 +29,16 @@ graph TB
     DB --> Sessions[Async Sessions]
 ```
 
-## 🧩 Module
+## 🧩 Modules
 
-Module sind die Bausteine Ihrer Anwendung. Sie enthalten:
+Modules are the building blocks of your application. They contain:
 
-- **Business Logic**: Kernfunktionalität Ihrer Anwendung
-- **API Routes**: REST-Endpoints für externe Kommunikation
-- **Data Models**: Strukturierte Datenrepräsentation
-- **Services**: Wiederverwendbare Geschäftslogik
+- **Business Logic**: Core functionality of your application
+- **API Routes**: REST endpoints for external communication
+- **Data Models**: Structured data representation
+- **Services**: Reusable business logic
 
-### Modul-Anatomie
+### Module Anatomy
 
 ```python
 from msfw import Module
@@ -48,58 +48,58 @@ from pydantic import BaseModel
 class ItemModule(Module):
     @property
     def name(self) -> str:
-        return "item"  # Eindeutiger Modulname
+        return "item"  # Unique module name
     
     @property
     def prefix(self) -> str:
-        return "/api/v1"  # URL-Präfix (optional)
+        return "/api/v1"  # URL prefix (optional)
     
     def register_routes(self, router: APIRouter) -> None:
-        # Routes definieren
+        # Define routes
         pass
     
     async def startup(self) -> None:
-        # Initialisierungslogik (optional)
+        # Initialization logic (optional)
         pass
     
     async def shutdown(self) -> None:
-        # Cleanup-Logik (optional)
+        # Cleanup logic (optional)
         pass
 ```
 
-### Modul-Registrierung
+### Module Registration
 
 ```python
 from msfw import MSFWApplication
 
 app = MSFWApplication(config)
 
-# Einzelnes Modul
+# Single module
 app.register_module(ItemModule())
 
-# Mehrere Module
+# Multiple modules
 app.register_modules([
     UserModule(),
     OrderModule(),
     ProductModule()
 ])
 
-# Auto-Discovery
-app.discover_modules("modules/")  # Lädt alle Module aus dem Verzeichnis
+# Auto-discovery
+app.discover_modules("modules/")  # Loads all modules from directory
 ```
 
 ## 🔌 Plugins
 
-Plugins erweitern die Funktionalität Ihrer Anwendung durch Event-Hooks und Middleware.
+Plugins extend your application's functionality through event hooks and middleware.
 
-### Plugin-Typen
+### Plugin Types
 
-1. **Middleware-Plugins**: HTTP-Request/Response-Verarbeitung
-2. **Event-Plugins**: Lifecycle-Events (startup, shutdown)
-3. **Service-Plugins**: Zusätzliche Services (Caching, Logging)
-4. **Integration-Plugins**: Externe Systeme (Databases, APIs)
+1. **Middleware Plugins**: HTTP request/response processing
+2. **Event Plugins**: Lifecycle events (startup, shutdown)
+3. **Service Plugins**: Additional services (caching, logging)
+4. **Integration Plugins**: External systems (databases, APIs)
 
-### Plugin-Beispiel
+### Plugin Example
 
 ```python
 from msfw import Plugin, Config
@@ -110,419 +110,541 @@ class CachePlugin(Plugin):
         return "cache"
     
     async def setup(self, config: Config) -> None:
-        # Plugin-spezifische Konfiguration
+        # Plugin-specific configuration
         self.cache_backend = config.get("cache.backend", "redis")
         
-        # Event-Hooks registrieren
+        # Register event hooks
         self.register_hook("app_startup", self.init_cache)
         self.register_hook("before_request", self.check_cache)
         self.register_hook("after_request", self.update_cache)
     
     async def init_cache(self, **kwargs):
-        # Cache-Backend initialisieren
+        # Initialize cache backend
         pass
 ```
 
-### Verfügbare Event-Hooks
+### Available Event Hooks
 
-- `app_startup`: Anwendungsstart
-- `app_shutdown`: Anwendungsende
-- `before_request`: Vor HTTP-Request
-- `after_request`: Nach HTTP-Request
-- `module_loaded`: Nach Modul-Registrierung
-- `plugin_loaded`: Nach Plugin-Registrierung
+- `app_startup`: Application startup
+- `app_shutdown`: Application shutdown
+- `before_request`: Before HTTP request
+- `after_request`: After HTTP request
+- `module_loaded`: After module registration
+- `plugin_loaded`: After plugin registration
 
-## ⚙️ Konfiguration
+## ⚙️ Configuration System
 
-MSFW bietet ein flexibles Konfigurationssystem mit:
+MSFW features a sophisticated configuration system that solves the "double configuration" problem by combining file-based configuration with environment variable interpolation.
 
 ### Environment Variable Interpolation
 
+The core feature that makes MSFW configuration powerful:
+
 ```toml
 # config/settings.toml
-app_name = "${APP_NAME:Default App Name}"
-database_url = "${DATABASE_URL:sqlite+aiosqlite:///./app.db}"
+app_name = "${APP_NAME:My MSFW Service}"
 debug = "${DEBUG:false}"
+database_url = "${DATABASE_URL:sqlite+aiosqlite:///./app.db}"
+
+[security]
+secret_key = "${SECRET_KEY}"  # Required - will fail if not set
+jwt_expire = "${JWT_EXPIRE:30}"  # Optional with default
+
+[services.api]
+port = "${API_PORT:8000}"
+workers = "${API_WORKERS:4}"
 ```
 
-### Hierarchische Konfiguration
+### Configuration Patterns
+
+**Required Variables**: `${VAR_NAME}` - Application fails if not set
+```toml
+secret_key = "${SECRET_KEY}"
+database_url = "${DATABASE_URL}"
+```
+
+**Optional with Defaults**: `${VAR_NAME:default}` - Uses default if not set
+```toml
+debug = "${DEBUG:false}"
+port = "${PORT:8000}"
+redis_url = "${REDIS_URL:redis://localhost:6379/0}"
+```
+
+**Complex Interpolation**: Build URLs from multiple variables
+```toml
+database_url = "postgresql://${DB_USER}:${DB_PASS}@${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME}"
+redis_url = "${REDIS_HOST:localhost}:${REDIS_PORT:6379}/${REDIS_DB:0}"
+```
+
+### Configuration Priority
+
+1. **Environment Variables** (highest priority)
+2. **Interpolated values** from TOML file
+3. **Default values** in interpolation syntax
+4. **Framework defaults** (lowest priority)
+
+### Loading Configuration
 
 ```python
-from msfw import Config
+from msfw import load_config, Config
 
-# Standardwerte
+# Automatic discovery (recommended)
+config = load_config()  # Looks for config/settings.toml or settings.toml
+
+# Specific file with interpolation
+config = Config.from_file("path/to/config.toml")
+
+# File + environment override
+config = Config.from_file_and_env("path/to/config.toml")
+
+# Programmatic configuration
 config = Config()
-config.app_name = "My App"
-
-# Aus Datei laden (überschreibt Standardwerte)
-config.load_from_file("config/settings.toml")
-
-# Environment Variables (überschreibt alles)
-config.load_from_env()
+config.app_name = "My Service"
+config.debug = True
 ```
 
-### Konfigurationsvererbung
+### Microservice-Specific Configuration
+
+MSFW supports configuration for multiple services in one file:
 
 ```toml
-# config/base.toml
+# Global defaults
+debug = "${DEBUG:false}"
+
 [database]
-echo = false
-pool_size = 10
+url = "${DATABASE_URL:sqlite+aiosqlite:///./app.db}"
+pool_size = "${DB_POOL_SIZE:10}"
 
-# config/development.toml
-[database]
-url = "sqlite+aiosqlite:///./dev.db"
-echo = true  # Überschreibt base.toml
+# Service-specific configurations
+[services.api]
+enabled = true
+port = "${API_PORT:8000}"
+workers = "${API_WORKERS:4}"
+debug = "${API_DEBUG:true}"
 
-# config/production.toml
-[database]
-url = "${DATABASE_URL}"  # Muss gesetzt sein
-pool_size = 50  # Überschreibt base.toml
+[services.api.database]
+url = "${API_DATABASE_URL:postgresql://db:5432/api}"
+
+[services.worker]
+enabled = "${WORKER_ENABLED:false}"
+port = "${WORKER_PORT:8001}"
+
+[services.worker.redis]
+url = "${WORKER_REDIS_URL:redis://localhost:6379/1}"
+
+# Environment-specific configurations
+[environments.development]
+debug = true
+log_level = "DEBUG"
+
+[environments.production]
+debug = false
+log_level = "WARNING"
 ```
 
-## 🗄️ Database Integration
+## 🌐 Service Communication SDK
 
-MSFW nutzt SQLAlchemy 2.0 mit Async-Unterstützung.
+MSFW includes a comprehensive SDK for inter-service communication with resilience patterns built-in.
 
-### Modell-Definition
-
-```python
-from sqlalchemy import Column, Integer, String, DateTime, ForeignKey
-from sqlalchemy.orm import relationship
-from sqlalchemy.sql import func
-from msfw.core.database import Base
-
-class User(Base):
-    __tablename__ = "users"
-    
-    id = Column(Integer, primary_key=True)
-    email = Column(String(255), unique=True, index=True)
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    
-    # Beziehungen
-    orders = relationship("Order", back_populates="user")
-
-class Order(Base):
-    __tablename__ = "orders"
-    
-    id = Column(Integer, primary_key=True)
-    user_id = Column(Integer, ForeignKey("users.id"))
-    total = Column(Integer)  # Cents
-    
-    # Beziehungen
-    user = relationship("User", back_populates="orders")
-```
-
-### Async Database Sessions
+### Basic Service Communication
 
 ```python
-from msfw.core.database import get_session
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
-from fastapi import Depends
+from msfw import ServiceSDK, call_service
 
-async def get_users(session: AsyncSession = Depends(get_session)):
-    result = await session.execute(select(User))
-    return result.scalars().all()
+# Initialize SDK
+sdk = ServiceSDK(config=config)
 
-async def create_user(user_data: UserCreate, session: AsyncSession = Depends(get_session)):
-    user = User(**user_data.dict())
-    session.add(user)
-    await session.commit()
-    await session.refresh(user)
-    return user
-```
-
-## 🔒 Sicherheit
-
-MSFW bietet integrierte Sicherheitsfeatures:
-
-### Authentication & Authorization
-
-```python
-from msfw.middleware.auth import JWTAuthMiddleware, require_auth
-from fastapi import Depends
-
-# JWT-Middleware
-app.add_middleware(JWTAuthMiddleware, secret_key=config.secret_key)
-
-# Route-Level-Schutz
-@router.get("/protected")
-async def protected_endpoint(current_user = Depends(require_auth)):
-    return {"user": current_user}
-
-# Role-basierte Berechtigung
-@router.get("/admin")
-async def admin_endpoint(current_user = Depends(require_auth(roles=["admin"]))):
-    return {"message": "Admin access"}
-```
-
-### CORS & Security Headers
-
-```python
-from msfw.middleware.security import SecurityMiddleware
-
-app.add_middleware(SecurityMiddleware, {
-    "cors_origins": ["https://myapp.com"],
-    "security_headers": True,
-    "rate_limiting": True
-})
-```
-
-## 📊 Monitoring & Observability
-
-### Health Checks
-
-Automatische Health-Check-Endpoints:
-
-- `/health`: Grundlegende Systemgesundheit
-- `/health/ready`: Bereitschaftsstatus
-- `/health/live`: Lebendigkeitsstatus
-
-```python
-from msfw.core.health import HealthCheck
-
-class DatabaseHealthCheck(HealthCheck):
-    async def check(self) -> bool:
-        try:
-            # Database-Verbindung prüfen
-            async with get_session() as session:
-                await session.execute("SELECT 1")
-            return True
-        except Exception:
-            return False
-
-# Health Check registrieren
-app.register_health_check("database", DatabaseHealthCheck())
-```
-
-### Prometheus Metrics
-
-Automatische Metriken:
-
-- HTTP-Request-Metriken
-- Response-Zeit-Histogramme
-- Fehlerrate-Counter
-- Anwendungsspezifische Metriken
-
-```python
-from msfw.core.metrics import metrics
-
-# Custom Metric
-user_registrations = metrics.counter(
-    "user_registrations_total",
-    "Total number of user registrations"
+# Register current service in service registry
+await sdk.register_current_service(
+    service_name="user-service",
+    version="1.0.0",
+    host="localhost",
+    port=8000
 )
 
-@router.post("/register")
-async def register_user(user_data: UserCreate):
-    user = await create_user(user_data)
-    user_registrations.inc()  # Metric erhöhen
-    return user
+# Call another service
+result = await call_service(
+    service="order-service",
+    endpoint="/orders",
+    method="GET",
+    timeout=30.0,
+    retry_attempts=3,
+    circuit_breaker_enabled=True
+)
+
+if result.success:
+    orders = result.data
+    print(f"Retrieved {len(orders)} orders")
+else:
+    print(f"Service call failed: {result.error}")
 ```
 
-### Structured Logging
+### Circuit Breaker Pattern
+
+The SDK includes automatic circuit breaker protection:
 
 ```python
-import structlog
+from msfw import ServiceClient, CircuitBreakerConfig
 
-logger = structlog.get_logger()
+# Configure circuit breaker
+circuit_config = CircuitBreakerConfig(
+    failure_threshold=5,        # Open after 5 failures
+    success_threshold=2,        # Close after 2 successes
+    timeout=60.0,              # Wait 60s before retry
+    retry_attempts=3,          # Retry failed requests
+    request_timeout=30.0       # Request timeout
+)
 
-@router.post("/orders")
-async def create_order(order_data: OrderCreate, current_user = Depends(require_auth)):
-    logger.info(
-        "Order creation started",
-        user_id=current_user.id,
-        order_total=order_data.total
-    )
-    
-    try:
-        order = await create_order(order_data, current_user.id)
-        logger.info(
-            "Order created successfully",
-            order_id=order.id,
-            user_id=current_user.id
-        )
-        return order
-    except Exception as e:
-        logger.error(
-            "Order creation failed",
-            user_id=current_user.id,
-            error=str(e)
-        )
-        raise
+# Get service client with circuit breaker
+client = sdk.get_client(
+    "order-service",
+    circuit_config=circuit_config
+)
+
+# Make requests - circuit breaker handles failures automatically
+try:
+    response = await client.get("/orders/123")
+    print("Order retrieved successfully")
+except ServiceClientError as e:
+    print(f"Service unavailable: {e}")
 ```
 
-## 🚀 Deployment-Konzepte
+### Type-Safe Service Interfaces
 
-### Container-Ready
-
-MSFW-Anwendungen sind für Container optimiert:
-
-```dockerfile
-FROM python:3.13-slim
-
-# Non-root user
-RUN useradd --create-home --shell /bin/bash app
-USER app
-WORKDIR /home/app
-
-# Dependencies
-COPY requirements.txt .
-RUN pip install --user -r requirements.txt
-
-# Application
-COPY . .
-
-# Health check
-HEALTHCHECK --interval=30s --timeout=30s --start-period=5s --retries=3 \
-    CMD curl -f http://localhost:8000/health || exit 1
-
-CMD ["python", "main.py"]
-```
-
-### 12-Factor App Compliance
-
-MSFW folgt den [12-Factor App](https://12factor.net/) Prinzipien:
-
-1. **Codebase**: Ein Repository, mehrere Deployments
-2. **Dependencies**: Explizite Abhängigkeitserklärung
-3. **Config**: Konfiguration in Environment Variables
-4. **Backing Services**: Services als angehängte Ressourcen
-5. **Build/Release/Run**: Strikte Trennung der Phasen
-6. **Processes**: Anwendung als stateless Prozesse
-7. **Port Binding**: Services über Port-Binding exportieren
-8. **Concurrency**: Skalierung über Prozessmodell
-9. **Disposability**: Schneller Start und graceful Shutdown
-10. **Dev/Prod Parity**: Entwicklung und Produktion ähnlich halten
-11. **Logs**: Logs als Event-Streams behandeln
-12. **Admin Processes**: Admin-Tasks als einmalige Prozesse
-
-## 🔄 Lifecycle Management
+Define type-safe interfaces for service communication:
 
 ```python
-from msfw import MSFWApplication
-
-class MyApp(MSFWApplication):
-    async def startup(self):
-        # Anwendungsstart
-        await super().startup()
-        await self.init_external_services()
-    
-    async def shutdown(self):
-        # Graceful Shutdown
-        await self.cleanup_resources()
-        await super().shutdown()
-    
-    async def init_external_services(self):
-        # Redis, Cache, etc.
-        pass
-    
-    async def cleanup_resources(self):
-        # Verbindungen schließen
-        pass
-```
-
-## 📈 Performance & Skalierung
-
-### Async/Await Pattern
-
-```python
-import asyncio
+from msfw import service_interface, service_call, HTTPMethod
+from pydantic import BaseModel
 from typing import List
 
-# Parallele Verarbeitung
-async def process_orders(order_ids: List[int]) -> List[Order]:
-    tasks = [process_single_order(order_id) for order_id in order_ids]
-    return await asyncio.gather(*tasks)
+class User(BaseModel):
+    id: int
+    name: str
+    email: str
 
-# Connection Pooling
-async def get_user_data(user_id: int) -> dict:
-    async with get_session() as session:
-        # Session automatisch zurückgegeben
-        user = await session.get(User, user_id)
-        return user.to_dict()
-```
+class CreateUserRequest(BaseModel):
+    name: str
+    email: str
 
-### Caching Strategien
-
-```python
-from msfw.plugins.cache import cache
-
-@cache(ttl=300)  # 5 Minuten Cache
-async def get_expensive_data(user_id: int) -> dict:
-    # Aufwändige Berechnung
-    return await compute_user_analytics(user_id)
-
-# Cache-Invalidierung
-@router.post("/users/{user_id}/update")
-async def update_user(user_id: int, data: UserUpdate):
-    user = await update_user_data(user_id, data)
-    await cache.invalidate(f"get_expensive_data:{user_id}")
-    return user
-```
-
-## 🧪 Testing-Strategien
-
-### Unit Tests
-
-```python
-import pytest
-from msfw import Config
-from modules.user_module import UserModule
-
-@pytest.fixture
-def user_module():
-    return UserModule()
-
-def test_user_module_name(user_module):
-    assert user_module.name == "user"
-
-@pytest.mark.asyncio
-async def test_user_creation(user_module):
-    # Mock dependencies
-    result = await user_module.create_user("test@example.com")
-    assert result.email == "test@example.com"
-```
-
-### Integration Tests
-
-```python
-import pytest
-from httpx import AsyncClient
-from msfw import MSFWApplication, Config
-
-@pytest.fixture
-async def test_app():
-    config = Config()
-    config.testing = True
-    config.database_url = "sqlite+aiosqlite:///:memory:"
+@service_interface("user-service", "/api/v1")
+class UserService:
+    """Type-safe user service interface."""
     
-    app = MSFWApplication(config)
-    app.register_module(UserModule())
-    return app
+    @service_call("user-service", HTTPMethod.GET, "/users/{user_id}")
+    async def get_user(self, user_id: int) -> User:
+        """Get user by ID with automatic type validation."""
+        pass
+    
+    @service_call("user-service", HTTPMethod.POST, "/users")
+    async def create_user(self, user_data: CreateUserRequest) -> User:
+        """Create a new user."""
+        pass
+    
+    @service_call("user-service", HTTPMethod.GET, "/users")
+    async def list_users(self, limit: int = 20) -> List[User]:
+        """List users with pagination."""
+        pass
 
-@pytest.mark.asyncio
-async def test_user_api(test_app):
-    async with AsyncClient(app=test_app, base_url="http://test") as client:
-        response = await client.post("/users", json={
-            "email": "test@example.com",
-            "name": "Test User"
-        })
-        assert response.status_code == 201
-        assert response.json()["email"] == "test@example.com"
+# Usage
+user_service = UserService()
+user = await user_service.get_user(123)
+users = await user_service.list_users(limit=50)
 ```
 
-## 📚 Nächste Schritte
+### Service Discovery & Registry
 
-Jetzt da Sie die Grundkonzepte verstehen, können Sie:
+```python
+# Register external services
+await sdk.register_external_service(
+    service_name="payment-service",
+    host="payments.example.com",
+    port=443,
+    protocol="https"
+)
 
-1. **[Konfiguration](../user_guide/configuration.md)** - Erweiterte Konfigurationsmöglichkeiten
-2. **[Module](../user_guide/modules.md)** - Detaillierte Modul-Entwicklung
-3. **[Plugins](../user_guide/plugins.md)** - Plugin-System beherrschen
-4. **[Database](../user_guide/database.md)** - Database-Integration vertiefen
-5. **[Beispiele](../examples/basic_service.md)** - Praktische Anwendungen erkunden
+# Service health checks
+is_healthy = await sdk.health_check_service("payment-service")
 
-```{tip}
-Die Konzepte bauen aufeinander auf. Beginnen Sie mit einfachen Modulen und erweitern Sie schrittweise die Funktionalität.
-``` 
+# Load balancing (if multiple instances)
+async with sdk.service_client("payment-service") as client:
+    # Automatically routes to healthy instance
+    response = await client.post("/payments", json=payment_data)
+```
+
+## 🔀 API Versioning
+
+MSFW has built-in API versioning that makes versioning a first-class citizen.
+
+### Version Strategies
+
+MSFW supports multiple versioning strategies:
+
+1. **URL Path** (default): `/api/v1.0/users`, `/api/v2.0/users`
+2. **Header**: `X-API-Version: 1.0`
+3. **Query Parameter**: `/users?version=1.0`
+4. **Content Negotiation**: `Accept: application/vnd.api+json;version=1.0`
+
+### Decorator-Based Versioning
+
+```python
+from msfw import get, post, put, delete
+
+# Version 1.0 endpoints
+@get("/users/{user_id}", version="1.0", tags=["users", "v1.0"])
+async def get_user_v1(user_id: int):
+    """Get user (v1.0 format)."""
+    return {
+        "id": user_id,
+        "name": "John Doe",
+        "email": "john@example.com"
+    }
+
+@post("/users", version="1.0", tags=["users", "v1.0"])
+async def create_user_v1(user_data: UserCreateV1):
+    """Create user (v1.0 format)."""
+    return {"id": 123, "name": user_data.name, "email": user_data.email}
+
+# Version 2.0 endpoints with enhanced features
+@get("/users/{user_id}", version="2.0", tags=["users", "v2.0"])
+async def get_user_v2(user_id: int):
+    """Get user (v2.0 format with profile)."""
+    return {
+        "id": user_id,
+        "first_name": "John",
+        "last_name": "Doe",
+        "email": "john@example.com",
+        "profile": {
+            "bio": "Software developer",
+            "avatar_url": "https://example.com/avatar.jpg"
+        }
+    }
+
+@post("/users", version="2.0", tags=["users", "v2.0"])
+async def create_user_v2(user_data: UserCreateV2):
+    """Create user (v2.0 format with profile)."""
+    return {
+        "id": 123,
+        "first_name": user_data.first_name,
+        "last_name": user_data.last_name,
+        "email": user_data.email,
+        "profile": user_data.profile
+    }
+```
+
+### Versioned Routers
+
+For better organization, use versioned routers:
+
+```python
+from msfw import VersionedRouter
+
+# Create version-specific routers
+v1_router = VersionedRouter("1.0", prefix="/api")
+v2_router = VersionedRouter("2.0", prefix="/api")
+
+@v1_router.get("/users")
+async def list_users_v1():
+    return [{"id": 1, "name": "John", "email": "john@example.com"}]
+
+@v2_router.get("/users")
+async def list_users_v2():
+    return [{
+        "id": 1,
+        "first_name": "John",
+        "last_name": "Doe",
+        "email": "john@example.com",
+        "profile": {"bio": "Developer"}
+    }]
+
+# Include routers in main app
+app.include_router(v1_router.router)
+app.include_router(v2_router.router)
+```
+
+### Version Compatibility & Deprecation
+
+```python
+from msfw import version_compatibility, api_version
+
+@version_compatibility("1.0", "1.1", "1.2")
+@get("/users", version="1.2")
+async def get_users():
+    """Compatible with versions 1.0, 1.1, and 1.2."""
+    return {"users": []}
+
+# Deprecate old versions
+@get("/legacy-endpoint", version="1.0", deprecated=True)
+async def legacy_endpoint():
+    """This endpoint is deprecated."""
+    return {"message": "Please use v2.0"}
+
+# Class-level versioning
+@api_version("2.0", deprecated=False)
+class UserAPIv2:
+    @get("/users")
+    async def get_users(self):
+        return {"users": []}
+```
+
+### Client Version Requests
+
+Clients can request specific versions:
+
+```bash
+# URL path versioning (default)
+GET /api/v1.0/users/123
+GET /api/v2.0/users/123
+
+# Header versioning
+GET /users/123
+X-API-Version: 2.0
+
+# Query parameter versioning
+GET /users/123?version=2.0
+
+# Content negotiation
+GET /users/123
+Accept: application/vnd.api+json;version=2.0
+```
+
+## 🎯 Decorator System
+
+MSFW provides a comprehensive decorator system for routes, middleware, and service communication.
+
+### Route Decorators
+
+```python
+from msfw import route, get, post, put, delete, patch
+
+# Basic route decorator
+@route("/items", methods=["GET", "POST"])
+async def handle_items():
+    return {"items": []}
+
+# HTTP method-specific decorators
+@get("/users/{user_id}")
+async def get_user(user_id: int):
+    return {"user_id": user_id}
+
+@post("/users", status_code=201)
+async def create_user(user_data: dict):
+    return {"id": 123, **user_data}
+
+@put("/users/{user_id}")
+async def update_user(user_id: int, user_data: dict):
+    return {"id": user_id, **user_data}
+
+@delete("/users/{user_id}", status_code=204)
+async def delete_user(user_id: int):
+    return None
+
+# Enhanced with OpenAPI metadata
+@get(
+    "/users/{user_id}",
+    tags=["users"],
+    summary="Get User",
+    description="Retrieve a user by ID",
+    response_model=User,
+    version="1.0"
+)
+async def get_user_detailed(user_id: int):
+    return {"id": user_id, "name": "John"}
+```
+
+### Service Communication Decorators
+
+```python
+from msfw import service_call, retry_on_failure, circuit_breaker, cached_service_call
+
+# Basic service call
+@service_call("user-service", HTTPMethod.GET, "/users/{user_id}")
+async def get_user(user_id: int) -> User:
+    pass
+
+# With retry logic
+@retry_on_failure(max_attempts=3, delay=1.0, backoff=2.0)
+@service_call("order-service", HTTPMethod.POST, "/orders")
+async def create_order(order_data: CreateOrderRequest) -> Order:
+    pass
+
+# With circuit breaker
+@circuit_breaker(failure_threshold=5, recovery_timeout=60.0)
+@service_call("payment-service", HTTPMethod.POST, "/payments")
+async def process_payment(payment_data: PaymentRequest) -> PaymentResult:
+    pass
+
+# With caching
+@cached_service_call(ttl=300.0)  # Cache for 5 minutes
+@service_call("product-service", HTTPMethod.GET, "/products/{product_id}")
+async def get_product(product_id: int) -> Product:
+    pass
+
+# Combined resilience patterns
+@circuit_breaker(failure_threshold=3, recovery_timeout=30.0)
+@retry_on_failure(max_attempts=2, delay=0.5)
+@cached_service_call(ttl=600.0)
+@service_call("catalog-service", HTTPMethod.GET, "/categories/{category}/products")
+async def get_products_by_category(category: str) -> List[Product]:
+    pass
+```
+
+### Event & Middleware Decorators
+
+```python
+from msfw import event_handler, middleware, on_startup, on_shutdown
+
+# Event handlers
+@event_handler("app_startup", priority=100)
+async def initialize_database():
+    print("Database initialized")
+
+@event_handler("app_shutdown", priority=100)
+async def cleanup_resources():
+    print("Resources cleaned up")
+
+# Convenience decorators
+@on_startup(priority=50)
+async def setup_logging():
+    print("Logging configured")
+
+@on_shutdown(priority=150)
+async def save_metrics():
+    print("Metrics saved")
+
+# Custom middleware
+@middleware(priority=100)
+class RequestTimingMiddleware:
+    def __init__(self, app):
+        self.app = app
+    
+    async def __call__(self, scope, receive, send):
+        start_time = time.time()
+        await self.app(scope, receive, send)
+        duration = time.time() - start_time
+        print(f"Request took {duration:.2f}s")
+```
+
+### Health Check Decorators
+
+```python
+from msfw import health_check
+
+@health_check(interval=30.0, timeout=5.0, failure_threshold=3)
+@service_call("notification-service", HTTPMethod.GET, "/health")
+async def check_notification_service():
+    """Health check with automatic monitoring."""
+    pass
+
+# Custom health checks
+@health_check(interval=60.0)
+async def check_database_connection():
+    """Custom health check for database."""
+    try:
+        await database.execute("SELECT 1")
+        return True
+    except Exception:
+        return False
+```
+
+All these features work together to create a powerful, production-ready microservice framework that handles configuration, service communication, API versioning, and more with minimal boilerplate code. 

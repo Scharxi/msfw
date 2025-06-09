@@ -1,52 +1,73 @@
 # Quick Start
 
-Lernen Sie MSFW in wenigen Minuten kennen! Diese Anleitung führt Sie durch die ersten Schritte mit dem Framework.
+Get started with MSFW in minutes! This guide walks you through the core features of the Modular Microservices Framework.
 
-## 🎯 Was Sie lernen werden
+## 🎯 What You'll Learn
 
-- Ihre erste MSFW-Anwendung erstellen
-- Module und Plugins verwenden
-- Eine einfache API entwickeln
-- Die Konfiguration verstehen
+- Run the demo application and explore its features
+- Create modules with auto-discovery
+- Build plugins with event hooks
+- Use advanced configuration with environment interpolation
+- Work with the Service SDK for inter-service communication
 
-## 1. Erste Anwendung erstellen
+## 1. Test the Demo Application
 
-### Minimale Anwendung
+MSFW comes with a comprehensive demo application that showcases all major features.
 
-Erstellen Sie eine Datei `app.py`:
-
-```python
-from msfw import MSFWApplication, Config
-
-# Konfiguration erstellen
-config = Config()
-config.app_name = "Meine erste MSFW App"
-config.debug = True
-
-# Anwendung erstellen
-app = MSFWApplication(config)
-
-# Health Check ist automatisch verfügbar
-if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
-```
-
-### Anwendung starten
+### Start the Demo
 
 ```bash
-python app.py
+# From the project root
+python main.py
 ```
 
-Ihre Anwendung ist jetzt verfügbar:
-- **API**: http://localhost:8000
+The demo application will be available at:
+- **API Documentation**: http://localhost:8000/docs
+- **Alternative Docs**: http://localhost:8000/redoc
 - **Health Check**: http://localhost:8000/health
-- **API Dokumentation**: http://localhost:8000/docs
 - **Metrics**: http://localhost:8000/metrics
+- **Service Info**: http://localhost:8000/info
+- **API Versions**: http://localhost:8000/api/versions
+- **Demo Endpoint**: http://localhost:8000/demo
 
-## 2. Ihr erstes Modul
+### Explore the Demo Features
 
-Module enthalten die Geschäftslogik Ihrer Anwendung. Erstellen Sie `modules/user_module.py`:
+The demo showcases:
+- **API Versioning**: Both v1.0 and v2.0 endpoints for users
+- **OpenAPI Documentation**: Comprehensive Swagger docs
+- **Module System**: Auto-discovered modules
+- **Plugin Architecture**: Event-driven extensions
+- **Service Communication**: Inter-service SDK
+- **Configuration**: Environment variable interpolation
+
+## 2. Understanding MSFW Architecture
+
+MSFW is built around these core concepts:
+
+```python
+from msfw import MSFWApplication, load_config
+
+# Load configuration with environment interpolation
+config = load_config()  # Loads from config/settings.toml
+
+# Create the application
+app = MSFWApplication(config)
+
+# Auto-discovery is enabled by default
+# Modules from modules/ and plugins from plugins/ are loaded automatically
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app.get_app(), host="0.0.0.0", port=8000)
+```
+
+## 3. Creating Your First Module
+
+Modules are self-contained components with their own routes, models, and lifecycle.
+
+### Create a Module File
+
+Create `modules/todo_module.py`:
 
 ```python
 from msfw import Module
@@ -54,401 +75,348 @@ from fastapi import APIRouter
 from pydantic import BaseModel
 from typing import List
 
-class User(BaseModel):
+class Todo(BaseModel):
     id: int
-    name: str
-    email: str
+    title: str
+    completed: bool = False
 
-class CreateUserRequest(BaseModel):
-    name: str
-    email: str
+class TodoCreate(BaseModel):
+    title: str
 
-class UserModule(Module):
+class TodoModule(Module):
     def __init__(self):
-        self.users: List[User] = []
+        self.todos: List[Todo] = []
         self.next_id = 1
 
     @property
     def name(self) -> str:
-        return "user"
+        return "todo"
 
-    def register_routes(self, router: APIRouter) -> None:
-        @router.get("/users", response_model=List[User])
-        async def list_users():
-            """Alle Benutzer auflisten"""
-            return self.users
-
-        @router.post("/users", response_model=User)
-        async def create_user(user_data: CreateUserRequest):
-            """Neuen Benutzer erstellen"""
-            user = User(
-                id=self.next_id,
-                name=user_data.name,
-                email=user_data.email
-            )
-            self.users.append(user)
-            self.next_id += 1
-            return user
-
-        @router.get("/users/{user_id}", response_model=User)
-        async def get_user(user_id: int):
-            """Benutzer nach ID abrufen"""
-            for user in self.users:
-                if user.id == user_id:
-                    return user
-            raise HTTPException(status_code=404, detail="User not found")
-```
-
-### Modul in der Anwendung registrieren
-
-Aktualisieren Sie Ihre `app.py`:
-
-```python
-from msfw import MSFWApplication, Config
-from modules.user_module import UserModule
-
-config = Config()
-config.app_name = "Benutzer API"
-
-app = MSFWApplication(config)
-
-# Modul registrieren
-user_module = UserModule()
-app.register_module(user_module)
-
-if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
-```
-
-## 3. Konfiguration mit Datei
-
-Erstellen Sie `config/settings.toml`:
-
-```toml
-# Anwendungskonfiguration
-app_name = "${APP_NAME:MSFW Demo App}"
-debug = "${DEBUG:true}"
-environment = "${ENVIRONMENT:development}"
-
-# Database-Konfiguration
-[database]
-url = "${DATABASE_URL:sqlite+aiosqlite:///./app.db}"
-echo = "${DATABASE_ECHO:false}"
-
-# API-Konfiguration
-[api]
-title = "${API_TITLE:MSFW API}"
-description = "Eine Demo-API mit MSFW"
-version = "1.0.0"
-
-# Sicherheit
-[security]
-secret_key = "${SECRET_KEY:dev-secret-key-change-in-production}"
-access_token_expire_minutes = "${TOKEN_EXPIRE:30}"
-```
-
-### Konfiguration verwenden
-
-```python
-from msfw import MSFWApplication, load_config
-
-# Konfiguration aus Datei laden
-config = load_config("config/settings.toml")
-
-app = MSFWApplication(config)
-```
-
-## 4. Database Integration
-
-### Modell definieren
-
-Erstellen Sie `models/user.py`:
-
-```python
-from sqlalchemy import Column, Integer, String, DateTime
-from sqlalchemy.sql import func
-from msfw.core.database import Base
-
-class User(Base):
-    __tablename__ = "users"
-
-    id = Column(Integer, primary_key=True, index=True)
-    name = Column(String(100), nullable=False)
-    email = Column(String(100), unique=True, index=True, nullable=False)
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
-```
-
-### Async Database Service
-
-```python
-from msfw.core.database import get_session
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
-from models.user import User
-
-class UserService:
-    @staticmethod
-    async def create_user(session: AsyncSession, name: str, email: str) -> User:
-        user = User(name=name, email=email)
-        session.add(user)
-        await session.commit()
-        await session.refresh(user)
-        return user
-
-    @staticmethod
-    async def get_users(session: AsyncSession) -> List[User]:
-        result = await session.execute(select(User))
-        return result.scalars().all()
-
-    @staticmethod
-    async def get_user_by_id(session: AsyncSession, user_id: int) -> User | None:
-        return await session.get(User, user_id)
-```
-
-### Modul mit Database
-
-```python
-from msfw import Module
-from msfw.core.database import get_session
-from fastapi import APIRouter, Depends
-from sqlalchemy.ext.asyncio import AsyncSession
-
-class DatabaseUserModule(Module):
     @property
-    def name(self) -> str:
-        return "database_user"
+    def version(self) -> str:
+        return "1.0.0"
+
+    @property
+    def description(self) -> str:
+        return "Simple todo management module"
 
     def register_routes(self, router: APIRouter) -> None:
-        @router.post("/users", response_model=UserResponse)
-        async def create_user(
-            user_data: CreateUserRequest,
-            session: AsyncSession = Depends(get_session)
-        ):
-            return await UserService.create_user(
-                session, user_data.name, user_data.email
-            )
+        @router.get("/todos", response_model=List[Todo])
+        async def list_todos():
+            """Get all todos"""
+            return self.todos
 
-        @router.get("/users", response_model=List[UserResponse])
-        async def list_users(session: AsyncSession = Depends(get_session)):
-            return await UserService.get_users(session)
+        @router.post("/todos", response_model=Todo)
+        async def create_todo(todo_data: TodoCreate):
+            """Create a new todo"""
+            todo = Todo(
+                id=self.next_id,
+                title=todo_data.title
+            )
+            self.todos.append(todo)
+            self.next_id += 1
+            return todo
+
+        @router.put("/todos/{todo_id}", response_model=Todo)
+        async def update_todo(todo_id: int):
+            """Toggle todo completion"""
+            for todo in self.todos:
+                if todo.id == todo_id:
+                    todo.completed = not todo.completed
+                    return todo
+            return {"error": "Todo not found"}
+
+    async def startup(self) -> None:
+        """Called when module starts"""
+        print(f"📝 Todo module started with {len(self.todos)} todos")
+
+    async def shutdown(self) -> None:
+        """Called when module shuts down"""
+        print(f"📝 Todo module shutting down with {len(self.todos)} todos")
+
+# Export the module for auto-discovery
+module = TodoModule()
 ```
 
-## 5. Plugin erstellen
+### Auto-Discovery in Action
 
-Plugins erweitern die Funktionalität. Erstellen Sie `plugins/logging_plugin.py`:
+With auto-discovery enabled (default), MSFW will automatically:
+1. Find the `todo_module.py` file in the `modules/` directory
+2. Load the `module` variable
+3. Register its routes under `/todo/...`
+4. Include it in the application lifecycle
+
+Your endpoints will be available at:
+- `GET /todo/todos` - List all todos
+- `POST /todo/todos` - Create a new todo
+- `PUT /todo/todos/{id}` - Toggle todo completion
+
+## 4. Building a Plugin
+
+Plugins extend functionality through event hooks and middleware.
+
+### Create a Plugin File
+
+Create `plugins/request_logger.py`:
 
 ```python
 from msfw import Plugin, Config
 import structlog
+from fastapi import Request, Response
 
-class LoggingPlugin(Plugin):
+class RequestLoggerPlugin(Plugin):
+    def __init__(self):
+        super().__init__()
+        self.request_count = 0
+        self.logger = structlog.get_logger()
+
     @property
     def name(self) -> str:
-        return "enhanced_logging"
+        return "request_logger"
+
+    @property
+    def version(self) -> str:
+        return "1.0.0"
+
+    @property
+    def description(self) -> str:
+        return "Logs all HTTP requests"
 
     async def setup(self, config: Config) -> None:
-        # Strukturiertes Logging konfigurieren
-        structlog.configure(
-            processors=[
-                structlog.stdlib.filter_by_level,
-                structlog.stdlib.add_logger_name,
-                structlog.stdlib.add_log_level,
-                structlog.stdlib.PositionalArgumentsFormatter(),
-                structlog.processors.TimeStamper(fmt="iso"),
-                structlog.processors.StackInfoRenderer(),
-                structlog.processors.format_exc_info,
-                structlog.processors.UnicodeDecoder(),
-                structlog.processors.JSONRenderer()
-            ],
-            context_class=dict,
-            logger_factory=structlog.stdlib.LoggerFactory(),
-            wrapper_class=structlog.stdlib.BoundLogger,
-            cache_logger_on_first_use=True,
-        )
-
-        # Event-Hooks registrieren
+        """Setup plugin with event hooks"""
+        # Register for application lifecycle events
         self.register_hook("app_startup", self.on_startup)
-        self.register_hook("before_request", self.log_request)
+        self.register_hook("app_shutdown", self.on_shutdown)
+        
+        # Register middleware
+        self.register_middleware(self.log_requests)
 
     async def on_startup(self, **kwargs):
-        logger = structlog.get_logger()
-        logger.info("Enhanced Logging Plugin aktiviert")
+        """Called when application starts"""
+        self.logger.info("🔍 Request Logger Plugin activated")
 
-    async def log_request(self, request, **kwargs):
-        logger = structlog.get_logger()
-        logger.info(
-            "HTTP Request",
+    async def on_shutdown(self, **kwargs):
+        """Called when application shuts down"""
+        self.logger.info(
+            "🔍 Request Logger Plugin shutting down", 
+            total_requests=self.request_count
+        )
+
+    async def log_requests(self, request: Request, call_next):
+        """Middleware to log all requests"""
+        self.request_count += 1
+        
+        self.logger.info(
+            "📥 HTTP Request",
             method=request.method,
             url=str(request.url),
-            client=request.client.host if request.client else None
+            user_agent=request.headers.get("user-agent"),
+            request_count=self.request_count
         )
+        
+        response = await call_next(request)
+        
+        self.logger.info(
+            "📤 HTTP Response",
+            status_code=response.status_code,
+            request_count=self.request_count
+        )
+        
+        return response
+
+# Export for auto-discovery
+plugin = RequestLoggerPlugin()
 ```
 
-### Plugin registrieren
+## 5. Advanced Configuration
+
+MSFW's configuration system supports environment variable interpolation and microservice-specific settings.
+
+### Configuration File
+
+Create `config/settings.toml`:
+
+```toml
+# Main application settings
+app_name = "${APP_NAME:My MSFW Service}"
+version = "${VERSION:1.0.0}"
+debug = "${DEBUG:true}"
+environment = "${ENVIRONMENT:development}"
+
+# Database configuration with interpolation
+[database]
+url = "${DATABASE_URL:sqlite+aiosqlite:///./app.db}"
+echo = "${DATABASE_ECHO:false}"
+pool_size = "${DB_POOL_SIZE:10}"
+
+# Service communication
+[service_registry]
+enabled = "${SERVICE_REGISTRY_ENABLED:false}"
+url = "${SERVICE_REGISTRY_URL:http://localhost:8500}"
+
+# Security settings
+[security]
+secret_key = "${SECRET_KEY:dev-secret-change-in-production}"
+access_token_expire_minutes = "${TOKEN_EXPIRE:30}"
+
+# Monitoring
+[monitoring]
+enabled = "${MONITORING_ENABLED:true}"
+prometheus_enabled = "${PROMETHEUS_ENABLED:true}"
+
+# OpenAPI documentation
+[openapi]
+title = "${API_TITLE:My MSFW API}"
+description = "Built with MSFW - Modular Microservices Framework"
+version = "${API_VERSION:1.0.0}"
+```
+
+### Using Configuration
 
 ```python
-from plugins.logging_plugin import LoggingPlugin
+from msfw import load_config, MSFWApplication
 
+# Load configuration with environment interpolation
+config = load_config("config/settings.toml")
+
+# Override programmatically if needed
+config.app_name = "Custom Service Name"
+config.debug = True
+
+# Configuration is automatically passed to modules and plugins
 app = MSFWApplication(config)
-
-# Plugin registrieren
-logging_plugin = LoggingPlugin()
-app.register_plugin(logging_plugin)
 ```
 
-## 6. CLI-Integration
+## 6. API Versioning
 
-MSFW bietet ein mächtiges CLI-Tool:
+MSFW has built-in support for API versioning with decorators.
 
-```bash
-# Neues Projekt erstellen
-msfw init mein-projekt
+```python
+from msfw import get, post, api_version
 
-# Modul erstellen
-msfw create-module auth --description="Authentication module"
+# Version 1.0 endpoint
+@get("/users/{user_id}", version="1.0")
+async def get_user_v1(user_id: int):
+    return {"id": user_id, "name": "John Doe", "email": "john@example.com"}
 
-# Plugin erstellen
-msfw create-plugin cache --description="Caching plugin"
-
-# Development-Server starten
-msfw run --reload
-
-# Database-Migrationen
-msfw db upgrade
+# Version 2.0 with enhanced response
+@get("/users/{user_id}", version="2.0")
+async def get_user_v2(user_id: int):
+    return {
+        "id": user_id,
+        "first_name": "John",
+        "last_name": "Doe", 
+        "email": "john@example.com",
+        "profile": {"bio": "Software developer"}
+    }
 ```
 
-## 7. Testing
+Clients can request specific versions:
+- `GET /api/v1.0/users/1` - Version 1.0
+- `GET /api/v2.0/users/1` - Version 2.0
+- `Accept: application/vnd.api+json;version=2.0` - Content negotiation
 
-Erstellen Sie `tests/test_user_module.py`:
+## 7. Service Communication SDK
+
+MSFW includes an SDK for inter-service communication with circuit breakers and retry logic.
+
+```python
+from msfw import ServiceSDK, call_service
+
+# Initialize SDK
+sdk = ServiceSDK(config=config)
+
+# Register current service
+await sdk.register_current_service(
+    service_name="user-service",
+    version="1.0.0",
+    host="localhost",
+    port=8000
+)
+
+# Call another service
+result = await call_service(
+    service="order-service",
+    endpoint="/orders",
+    method="GET",
+    circuit_breaker_enabled=True,
+    retry_attempts=3
+)
+
+if result.success:
+    orders = result.data
+else:
+    print(f"Service call failed: {result.error}")
+```
+
+## 8. Testing Your Application
+
+MSFW provides excellent testing support with dependency injection.
 
 ```python
 import pytest
 from httpx import AsyncClient
 from msfw import MSFWApplication, Config
-from modules.user_module import UserModule
 
 @pytest.fixture
-async def app():
+async def test_app():
     config = Config()
-    config.app_name = "Test App"
-    config.testing = True
+    config.database.url = "sqlite+aiosqlite:///:memory:"
+    config.auto_discover_modules = False  # Control module loading
     
     app = MSFWApplication(config)
-    app.register_module(UserModule())
+    await app.initialize()
     return app
 
-@pytest.fixture
-async def client(app):
-    async with AsyncClient(app=app, base_url="http://test") as ac:
-        yield ac
-
 @pytest.mark.asyncio
-async def test_create_user(client):
-    response = await client.post("/users", json={
-        "name": "Test User",
-        "email": "test@example.com"
-    })
-    assert response.status_code == 200
-    data = response.json()
-    assert data["name"] == "Test User"
-    assert data["email"] == "test@example.com"
-
-@pytest.mark.asyncio
-async def test_list_users(client):
-    # Benutzer erstellen
-    await client.post("/users", json={
-        "name": "Test User",
-        "email": "test@example.com"
-    })
-    
-    # Benutzer auflisten
-    response = await client.get("/users")
-    assert response.status_code == 200
-    users = response.json()
-    assert len(users) == 1
-    assert users[0]["name"] == "Test User"
+async def test_todo_creation(test_app):
+    # Test the auto-discovered module
+    async with AsyncClient(app=test_app.get_app(), base_url="http://test") as client:
+        response = await client.post("/todo/todos", json={"title": "Test task"})
+        assert response.status_code == 200
+        todo = response.json()
+        assert todo["title"] == "Test task"
+        assert todo["completed"] is False
 ```
 
-### Tests ausführen
+## 9. CLI Tools
+
+MSFW includes powerful CLI tools for project management:
 
 ```bash
-# Alle Tests
-pytest
+# Create a new project
+msfw init my-service
 
-# Mit Coverage
-pytest --cov=msfw
+# Generate a module
+msfw create-module auth --description="Authentication module"
 
-# Bestimmte Tests
-pytest tests/test_user_module.py -v
+# Generate a plugin  
+msfw create-plugin cache --description="Caching plugin"
+
+# Show project information
+msfw info
+
+# Run the application
+msfw run --reload
 ```
 
-## 8. Environment Variables
+## 🚀 Next Steps
 
-Erstellen Sie `.env` für lokale Entwicklung:
+Now that you understand the basics, explore:
 
-```bash
-# Anwendungskonfiguration
-APP_NAME="Lokale Entwicklung"
-DEBUG=true
-ENVIRONMENT=development
+1. **[Basic Concepts](basic_concepts.md)** - Deep dive into MSFW architecture
+2. **Demo Application** - Study `main.py` for advanced patterns
+3. **CLI Features** - Run `msfw --help` to see all available commands
+4. **Configuration** - Explore environment-specific configs
+5. **Service Communication** - Build distributed systems with the SDK
 
-# Database
-DATABASE_URL="sqlite+aiosqlite:///./dev.db"
-DATABASE_ECHO=true
+## Key Features Recap
 
-# Sicherheit
-SECRET_KEY="development-secret-key"
-TOKEN_EXPIRE=60
-
-# Logging
-LOG_LEVEL=DEBUG
-LOG_FORMAT=text
-```
-
-## 9. Vollständiges Beispiel
-
-Hier ist eine vollständige Anwendung mit allem, was wir gelernt haben:
-
-```python
-# main.py
-from msfw import MSFWApplication, load_config
-from modules.user_module import DatabaseUserModule
-from plugins.logging_plugin import LoggingPlugin
-
-def create_app():
-    # Konfiguration laden
-    config = load_config()
-    
-    # Anwendung erstellen
-    app = MSFWApplication(config)
-    
-    # Module registrieren
-    app.register_module(DatabaseUserModule())
-    
-    # Plugins registrieren
-    app.register_plugin(LoggingPlugin())
-    
-    return app
-
-app = create_app()
-
-if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000, reload=True)
-```
-
-## 🚀 Nächste Schritte
-
-Glückwunsch! Sie haben Ihre erste MSFW-Anwendung erstellt. Jetzt können Sie:
-
-1. **[Grundkonzepte](basic_concepts.md)** vertiefen
-2. **[Konfiguration](../user_guide/configuration.md)** erweitert nutzen
-3. **[Module](../user_guide/modules.md)** komplexer gestalten
-4. **[Plugins](../user_guide/plugins.md)** für erweiterte Funktionalität erstellen
-5. **[Database](../user_guide/database.md)** für persistente Speicherung nutzen
-
-```{tip}
-Schauen Sie sich die [Beispiele](../examples/basic_service.md) an, um fortgeschrittene Patterns zu erlernen.
-``` 
+✅ **Auto-discovery** of modules and plugins  
+✅ **Environment variable interpolation** in configs  
+✅ **Built-in API versioning** with content negotiation  
+✅ **Service SDK** for microservice communication  
+✅ **Event-driven architecture** with plugins  
+✅ **Production-ready** monitoring and health checks  
+✅ **SQLAlchemy 2.0** async database support  
+✅ **Comprehensive testing** utilities 

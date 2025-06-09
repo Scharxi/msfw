@@ -4,13 +4,12 @@
 # You can set these variables from the command line, and also
 # from the environment for the first two.
 SPHINXOPTS    ?=
-SPHINXBUILD  ?= sphinx-build
+SPHINXBUILD  ?= ../.venv/bin/python -m sphinx
 SOURCEDIR    = .
 BUILDDIR     = _build
 
-# Language settings
-LANGUAGES    = de en
-POT_DIR      = locales
+# Single language setup
+LANGUAGE     = en
 
 # Put it first so that "make" without argument is like "make help".
 help:
@@ -27,50 +26,12 @@ clean-all:
 	rm -rf $(BUILDDIR)
 	rm -rf $(POT_DIR)
 
-# Generate .pot files for translation
-gettext:
-	@$(SPHINXBUILD) -b gettext $(SOURCEDIR) $(POT_DIR)
-	@echo "Generated .pot files in $(POT_DIR)/"
 
-# Update translation files
-update-translations: gettext
-	@for lang in $(LANGUAGES); do \
-		if [ "$$lang" != "de" ]; then \
-			sphinx-intl update -p $(POT_DIR) -l $$lang; \
-		fi \
-	done
-	@echo "Updated translation files for languages: $(LANGUAGES)"
 
-# Build German documentation (default)
-html-de:
-	@$(SPHINXBUILD) -b html -D language=de $(SOURCEDIR) $(BUILDDIR)/html/de $(SPHINXOPTS)
-	@echo "German documentation built in $(BUILDDIR)/html/de/"
-
-# Build English documentation
-html-en:
-	@$(SPHINXBUILD) -b html -D language=en $(SOURCEDIR) $(BUILDDIR)/html/en $(SPHINXOPTS)
-	@echo "English documentation built in $(BUILDDIR)/html/en/"
-
-# Build all languages
-html-all: html-de html-en
-	@echo "All language versions built successfully!"
-
-# Create index.html that redirects to German version
-html-index:
-	@mkdir -p $(BUILDDIR)/html
-	@echo '<!DOCTYPE html>' > $(BUILDDIR)/html/index.html
-	@echo '<html><head><meta charset="utf-8">' >> $(BUILDDIR)/html/index.html
-	@echo '<meta http-equiv="refresh" content="0; url=de/">' >> $(BUILDDIR)/html/index.html
-	@echo '<title>MSFW Documentation</title></head>' >> $(BUILDDIR)/html/index.html
-	@echo '<body><p>Redirecting to <a href="de/">German documentation</a>...</p>' >> $(BUILDDIR)/html/index.html
-	@echo '<p><a href="en/">English documentation</a></p></body></html>' >> $(BUILDDIR)/html/index.html
-	@echo "Created redirect index.html"
-
-# Build complete documentation with all languages
-html: html-all html-index
-	@echo "Complete multilingual documentation built!"
-	@echo "German: $(BUILDDIR)/html/de/"
-	@echo "English: $(BUILDDIR)/html/en/"
+# Build HTML documentation
+html:
+	@$(SPHINXBUILD) -b html -D language=$(LANGUAGE) $(SOURCEDIR) $(BUILDDIR)/html $(SPHINXOPTS)
+	@echo "Documentation built in $(BUILDDIR)/html/"
 
 # Serve documentation locally
 serve:
@@ -79,7 +40,7 @@ serve:
 
 # Build documentation for development (with auto-rebuild)
 dev:
-	@sphinx-autobuild -b html -D language=de $(SOURCEDIR) $(BUILDDIR)/html/de $(SPHINXOPTS) --host 0.0.0.0 --port 8000
+	@sphinx-autobuild -b html -D language=$(LANGUAGE) $(SOURCEDIR) $(BUILDDIR)/html $(SPHINXOPTS) --host 0.0.0.0 --port 8000
 
 # Lint documentation
 lint:
