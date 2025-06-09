@@ -53,6 +53,14 @@ test = [
     "httpx>=0.25.0",
     "coverage>=7.3.0",
 ]
+docs = [
+    "sphinx>=8.2.3",
+    "furo>=2024.1.29",
+    "sphinx-autodoc-typehints>=3.2.0",
+    "sphinx-copybutton>=0.5.2",
+    "sphinx-intl>=2.3.1",
+    "myst-parser>=4.0.1",
+]
 
 [project.scripts]
 msfw = "msfw.cli:app"
@@ -98,10 +106,16 @@ dev = [
     "httpx>=0.28.1",
     "isort>=6.0.1",
     "mypy>=1.16.0",
+    "myst-parser>=4.0.1",
     "pytest>=8.4.0",
     "pytest-asyncio>=1.0.0",
     "pytest-cov>=6.1.1",
     "pytest-mock>=3.14.1",
     "radon>=6.0.1",
     "ruff>=0.11.13",
+    "sphinx>=8.2.3",
+    "sphinx-autodoc-typehints>=3.2.0",
+    "sphinx-copybutton>=0.5.2",
+    "sphinx-intl>=2.3.1",
+    "sphinx-rtd-theme>=3.0.2",
 ]
